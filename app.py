@@ -27,35 +27,43 @@ with tab1:
     if pdf_subido is not None:
         try:
             texto_completo = ""
-            # pdfplumber lee el documento respetando la estructura visual de las columnas
             with pdfplumber.open(pdf_subido) as pdf:
                 for pagina in pdf.pages:
                     texto = pagina.extract_text(layout=True)
                     if texto:
                         texto_completo += texto + "\n"
                 
+            # Diccionario con tuplas de patrones: (1. Nombre primero, 2. Número primero)
             patrones = {
-                'Glucosa': r'\bGlucosa\b\D*?(\d+[.,]\d+|\d+)',
-                'Trigliceridos': r'\bTriglic[eé]ridos\b\D*?(\d+[.,]\d+|\d+)',
-                'Colesterol': r'\bColesterol(?: total)?\b\D*?(\d+[.,]\d+|\d+)',
-                'Colinesterasa': r'\bColinesterasa\b\D*?(\d+[.,]\d+|\d+)',
-                'Gamma_GT': r'(?:Gamma[\s-]*GT|Gamma[\s-]*glutamil[\s-]*transferasa)\D*?(\d+[.,]\d+|\d+)',
-                'Albumina': r'\bAlb[uú]mina\b\D*?(\d+[.,]\d+|\d+)',
-                'MCH': r'\b(?:MCH|Hemoglobina corpuscular media)\b\D*?(\d+[.,]\d+|\d+)',
-                'Cloruro': r'\bCloruro\b\D*?(\d+[.,]\d+|\d+)',
-                'Magnesio': r'\bMagnesio\b\D*?(\d+[.,]\d+|\d+)',
-                'Hb_libre': r'\b(?:Hb libre|Hemoglobina libre|Hemoglobina(?!\scorpuscular))\b\D*?(\d+[.,]\d+|\d+)',
-                'Alfa_amilasa': r'\b(?:Alfa[- ]amilasa|amilasa)\b\D*?(\d+[.,]\d+|\d+)',
-                'PCR': r'\b(?:PCR|Prote[ií]na C reactiva)\b\D*?(\d+[.,]\d+|\d+)'
+                'Glucosa': (r'\bGlucosa\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\bGlucosa\b'),
+                'Trigliceridos': (r'\bTriglic[eé]ridos\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\bTriglic[eé]ridos\b'),
+                'Colesterol': (r'\bColesterol(?: total)?\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\bColesterol(?: total)?\b'),
+                'Colinesterasa': (r'\bColinesterasa\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\bColinesterasa\b'),
+                'Gamma_GT': (r'(?:Gamma[\s-]*GT|Gamma[\s-]*glutamil[\s-]*transferasa)\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?(?:Gamma[\s-]*GT|Gamma[\s-]*glutamil[\s-]*transferasa)'),
+                'Albumina': (r'\bAlb[uú]mina\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\bAlb[uú]mina\b'),
+                'MCH': (r'\b(?:MCH|Hemoglobina corpuscular media)\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\b(?:MCH|Hemoglobina corpuscular media)\b'),
+                'Cloruro': (r'\bCloruro\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\bCloruro\b'),
+                'Magnesio': (r'\bMagnesio\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\bMagnesio\b'),
+                'Hb_libre': (r'\b(?!Hemoglobina corpuscular\b)Hemoglobina\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\b(?!Hemoglobina corpuscular\b)Hemoglobina\b'),
+                'Alfa_amilasa': (r'\b(?:Alfa[- ]amilasa|amilasa)\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\b(?:Alfa[- ]amilasa|amilasa)\b'),
+                'PCR': (r'\b(?:PCR|Prote[ií]na C reactiva)\b\D*?(\d+[.,]\d+|\d+)', r'(\d+[.,]\d+|\d+)\D*?\b(?:PCR|Prote[ií]na C reactiva)\b')
             }
 
             variables_encontradas = 0
-            for clave, patron in patrones.items():
-                match = re.search(patron, texto_completo, re.IGNORECASE)
+            for clave, (patron_despues, patron_antes) in patrones.items():
+                # Estrategia A: Buscar si el número está a la derecha del nombre
+                match = re.search(patron_despues, texto_completo, re.IGNORECASE)
                 if match:
                     valor_str = match.group(1).replace(',', '.')
                     valores_extraidos[clave] = float(valor_str)
                     variables_encontradas += 1
+                else:
+                    # Estrategia B: Buscar si el número está a la izquierda (inversión de tabla)
+                    match = re.search(patron_antes, texto_completo, re.IGNORECASE)
+                    if match:
+                        valor_str = match.group(1).replace(',', '.')
+                        valores_extraidos[clave] = float(valor_str)
+                        variables_encontradas += 1
             
             st.success(f"📄 Analítica procesada: Se han extraído {variables_encontradas} parámetros automáticamente.")
             
