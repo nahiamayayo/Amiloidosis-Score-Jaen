@@ -51,3 +51,36 @@ def procesar_analitica_paciente(datos_paciente):
         "datos_procesados": paciente_procesado,
         "imputados": variables_imputadas
     }
+
+def calcular_score_bruto(datos_procesados):
+    """
+    Multiplica los valores del paciente por los pesos de la regresión logística.
+    Devuelve un score numérico bruto.
+    """
+    score_total = 0
+    for var, peso in PESOS.items():
+        score_total += datos_procesados[var] * peso
+    return round(score_total, 2)
+
+def evaluar_perfil_riesgo(datos_procesados):
+    """
+    Evalúa las 5 variables principales contra las medianas de riesgo de la cohorte enferma.
+    Devuelve cuántas variables están en rango de Alta Sospecha.
+    """
+    alertas = []
+    
+    # Parámetros que suman riesgo si están BAJOS
+    if datos_procesados['Glucosa'] < 98.5:
+        alertas.append("Glucosa Baja (<98.5)")
+    if datos_procesados['Trigliceridos'] < 93.0:
+        alertas.append("Triglicéridos Bajos (<93.0)")
+    if datos_procesados['Colinesterasa'] < 6.0:
+        alertas.append("Colinesterasa Baja (<6.0)")
+        
+    # Parámetros que suman riesgo si están ALTOS
+    if datos_procesados['Gamma_GT'] > 64.0:
+        alertas.append("Gamma-GT Alta (>64.0)")
+    if datos_procesados['MCH'] > 30.2:
+        alertas.append("MCH Alta (>30.2)")
+        
+    return alertas
