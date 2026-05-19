@@ -2,11 +2,10 @@ import streamlit as st
 import pandas as pd
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
-st.set_page_config(page_title="ATTR-Lab Centinela", page_icon="🫀", layout="wide")
+st.set_page_config(page_title="Amiloidosis-Score-Jaén", page_icon="🫀", layout="wide")
 
-st.title("🫀 Proyecto Centinela: ATTR-Lab (Hospital de Jaén)")
-st.markdown("Herramienta de cribado inteligente para Amiloidosis Cardíaca basada en parámetros de laboratorio de rutina.")
-
+st.title("🫀 Amiloidosis-Score-Jaén")
+st.markdown("Herramienta de cribado inteligente para Amiloidosis Cardíaca basada en parámetros de rutina.")
 tab1, tab2 = st.tabs(["Calculadora Individual", "Validación por Lotes (Archivo)"])
 
 with tab1:
