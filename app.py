@@ -49,17 +49,20 @@ with tab1:
             }
 
             variables_encontradas = 0
-            for linea in lineas:
+            for i, linea in enumerate(lineas):
                 for clave, patron in patrones_nombres.items():
                     if valores_extraidos[clave] is None:
                         match_nombre = re.search(patron, linea, re.IGNORECASE)
                         if match_nombre:
-                            linea_resto = linea[match_nombre.end():]
-                            match_numero = re.search(r'[\*\s]*(\d+[.,]\d+|\d+)', linea_resto
+                            # Buscamos en la línea actual y la siguiente por si el valor está abajo
+                            bloque_busqueda = linea + " " + (lineas[i+1] if i+1 < len(lineas) else "")
+                            match_numero = re.search(r'[\*\s]*(\d+[.,]\d+|\d+)', bloque_busqueda[match_nombre.end():])
+                            
                             if match_numero:
                                 valor_str = match_numero.group(1).replace(',', '.')
                                 valores_extraidos[clave] = float(valor_str)
                                 variables_encontradas += 1
+            
             st.success(f"📄 Analítica procesada: Se han extraído {variables_encontradas} parámetros.")
         except Exception as e:
             st.error(f"Error al leer el PDF: {e}")
