@@ -14,11 +14,9 @@ tab1, tab2 = st.tabs(["Calculadora Individual", "Validación por Lotes (Archivo)
 with tab1:
     st.header("Evaluación de Paciente Individual")
     
-    # NUEVO: Lector de PDF Automático
     st.info("💡 Novedad: Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
     pdf_subido = st.file_uploader("Subir Analítica (PDF)", type=["pdf"])
     
-    # Diccionario temporal para guardar los valores extraídos
     valores_extraidos = {
         'Glucosa': None, 'Trigliceridos': None, 'Colesterol': None,
         'Colinesterasa': None, 'Gamma_GT': None, 'Albumina': None,
@@ -26,15 +24,13 @@ with tab1:
         'Hb_libre': None, 'Alfa_amilasa': None, 'PCR': None
     }
     
-if pdf_subido is not None:
+    if pdf_subido is not None:
         try:
-            # Leer el PDF
             lector = PyPDF2.PdfReader(pdf_subido)
             texto_completo = ""
             for pagina in lector.pages:
                 texto_completo += pagina.extract_text()
                 
-            # Diccionario de patrones Regex adaptados al formato del Hospital de Jaén (SAS)
             patrones = {
                 'Glucosa': r'Glucosa\D*?(\d+[.,]\d+|\d+)',
                 'Trigliceridos': r'Triglic[eé]ridos\D*?(\d+[.,]\d+|\d+)',
@@ -50,12 +46,10 @@ if pdf_subido is not None:
                 'PCR': r'Prote[ií]na C reactiva\D*?(\d+[.,]\d+|\d+)'
             }
 
-            # Extracción inteligente
             variables_encontradas = 0
             for clave, patron in patrones.items():
                 match = re.search(patron, texto_completo, re.IGNORECASE)
                 if match:
-                    # Extraer el número, cambiar coma por punto para Python, y convertir a float
                     valor_str = match.group(1).replace(',', '.')
                     valores_extraidos[clave] = float(valor_str)
                     variables_encontradas += 1
@@ -67,7 +61,6 @@ if pdf_subido is not None:
 
     st.divider()
     
-    # Los formularios ahora toman el valor extraído si existe
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -126,7 +119,7 @@ if pdf_subido is not None:
                     st.warning(f"⚠️ RIESGO MODERADO/MIXTO: {len(alertas)} de 5 marcadores en rango de riesgo.")
                 else:
                     st.success("🟢 BAJO RIESGO: Patrón bioquímico inconsistente con amiloidosis.")
-
+            
             if alertas:
                 st.markdown("**Marcadores detectados en rango de infiltración/congestión:**")
                 for alerta in alertas:
