@@ -1,39 +1,76 @@
 import streamlit as st
 import pandas as pd
+import re
+import PyPDF2
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
 st.set_page_config(page_title="Amiloidosis-Score-Jaén", page_icon="🫀", layout="wide")
 
 st.title("🫀 Amiloidosis-Score-Jaén")
 st.markdown("Herramienta de cribado inteligente para Amiloidosis Cardíaca basada en parámetros de rutina.")
+
 tab1, tab2 = st.tabs(["Calculadora Individual", "Validación por Lotes (Archivo)"])
 
 with tab1:
     st.header("Evaluación de Paciente Individual")
-    st.markdown("Introduce los valores analíticos del paciente. Deja en blanco los campos no disponibles.")
     
+    # NUEVO: Lector de PDF Automático
+    st.info("💡 Novedad: Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
+    pdf_subido = st.file_uploader("Subir Analítica (PDF)", type=["pdf"])
+    
+    # Diccionario temporal para guardar los valores extraídos
+    valores_extraidos = {
+        'Glucosa': None, 'Trigliceridos': None, 'Colesterol': None,
+        'Colinesterasa': None, 'Gamma_GT': None, 'Albumina': None,
+        'MCH': None, 'Cloruro': None, 'Magnesio': None,
+        'Hb_libre': None, 'Alfa_amilasa': None, 'PCR': None
+    }
+    
+    if pdf_subido is not None:
+        try:
+            # Leer el PDF
+            lector = PyPDF2.PdfReader(pdf_subido)
+            texto_completo = ""
+            for pagina in lector.pages:
+                texto_completo += pagina.extract_text()
+                
+            # Expresiones regulares básicas para buscar los valores (Esto se ajustará según el formato del hospital de Jaén)
+            match_glucosa = re.search(r'Glucosa.*?(\d+[.,]?\d*)', texto_completo, re.IGNORECASE)
+            if match_glucosa: valores_extraidos['Glucosa'] = float(match_glucosa.group(1).replace(',', '.'))
+            
+            match_trigliceridos = re.search(r'Triglic[eé]ridos.*?(\d+[.,]?\d*)', texto_completo, re.IGNORECASE)
+            if match_trigliceridos: valores_extraidos['Trigliceridos'] = float(match_trigliceridos.group(1).replace(',', '.'))
+            
+            st.success("Analítica procesada. Revisa que los valores extraídos sean correctos antes de calcular.")
+            
+        except Exception as e:
+            st.error(f"Error al leer el PDF: {e}")
+
+    st.divider()
+    
+    # Los formularios ahora toman el valor extraído si existe
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.subheader("Perfil Metabólico")
-        glucosa = st.number_input("Glucosa (mg/dL)", value=None)
-        trigliceridos = st.number_input("Triglicéridos (mg/dL)", value=None)
-        colesterol = st.number_input("Colesterol Total (mg/dL)", value=None)
+        glucosa = st.number_input("Glucosa (mg/dL)", value=valores_extraidos['Glucosa'])
+        trigliceridos = st.number_input("Triglicéridos (mg/dL)", value=valores_extraidos['Trigliceridos'])
+        colesterol = st.number_input("Colesterol Total (mg/dL)", value=valores_extraidos['Colesterol'])
         
     with col2:
         st.subheader("Perfil Hepático")
-        colinesterasa = st.number_input("Colinesterasa (kU/L)", value=None)
-        gamma_gt = st.number_input("Gamma-GT (U/L)", value=None)
-        albumina = st.number_input("Albúmina (g/L)", value=None)
+        colinesterasa = st.number_input("Colinesterasa (kU/L)", value=valores_extraidos['Colinesterasa'])
+        gamma_gt = st.number_input("Gamma-GT (U/L)", value=valores_extraidos['Gamma_GT'])
+        albumina = st.number_input("Albúmina (g/L)", value=valores_extraidos['Albumina'])
         
     with col3:
         st.subheader("Perfil Hemático / Otros")
-        mch = st.number_input("MCH (pg)", value=None)
-        cloruro = st.number_input("Cloruro (mmol/L)", value=None)
-        magnesio = st.number_input("Magnesio (mmol/L)", value=None)
-        hemoglobina_libre = st.number_input("Hb libre (µmol/L)", value=None)
-        alfa_amilasa = st.number_input("Alfa-amilasa (U/L)", value=None)
-        pcr = st.number_input("PCR (mg/dL)", value=None)
+        mch = st.number_input("MCH (pg)", value=valores_extraidos['MCH'])
+        cloruro = st.number_input("Cloruro (mmol/L)", value=valores_extraidos['Cloruro'])
+        magnesio = st.number_input("Magnesio (mmol/L)", value=valores_extraidos['Magnesio'])
+        hemoglobina_libre = st.number_input("Hb libre (µmol/L)", value=valores_extraidos['Hb_libre'])
+        alfa_amilasa = st.number_input("Alfa-amilasa (U/L)", value=valores_extraidos['Alfa_amilasa'])
+        pcr = st.number_input("PCR (mg/dL)", value=valores_extraidos['PCR'])
 
     if st.button("Calcular Riesgo (Provisional)", type="primary"):
         datos_paciente = {
@@ -70,7 +107,7 @@ with tab1:
                     st.warning(f"⚠️ RIESGO MODERADO/MIXTO: {len(alertas)} de 5 marcadores en rango de riesgo.")
                 else:
                     st.success("🟢 BAJO RIESGO: Patrón bioquímico inconsistente con amiloidosis.")
-            
+
             if alertas:
                 st.markdown("**Marcadores detectados en rango de infiltración/congestión:**")
                 for alerta in alertas:
