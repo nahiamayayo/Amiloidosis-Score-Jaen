@@ -55,7 +55,8 @@ with tab1:
                         match_nombre = re.search(patron, linea, re.IGNORECASE)
                         if match_nombre:
                             linea_resto = linea[match_nombre.end():]
-                            match_numero = re.search(r'[\*\s]*(\d+[.,]\d+|\d+)', linea_resto)                            if match_numero:
+                            match_numero = re.search(r'[\*\s]*(\d+[.,]\d+|\d+)', linea_resto
+                            if match_numero:
                                 valor_str = match_numero.group(1).replace(',', '.')
                                 valores_extraidos[clave] = float(valor_str)
                                 variables_encontradas += 1
