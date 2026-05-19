@@ -13,7 +13,6 @@ tab1, tab2 = st.tabs(["Calculadora Individual", "Validación por Lotes (Archivo)
 
 with tab1:
     st.header("Evaluación de Paciente Individual")
-    
     st.info("💡 Novedad: Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
     pdf_subido = st.file_uploader("Subir Analítica (PDF)", type=["pdf"])
     
@@ -25,19 +24,15 @@ with tab1:
     }
     
     if pdf_subido is not None:
-       try:
+        try:
             texto_completo = ""
-            # pdfplumber lee el documento respetando la estructura visual de las columnas (layout=True)
             with pdfplumber.open(pdf_subido) as pdf:
                 for pagina in pdf.pages:
                     texto = pagina.extract_text(layout=True)
                     if texto:
                         texto_completo += texto + "\n"
-                        
-            # Dividimos todo el texto en líneas individuales
+            
             lineas = texto_completo.split('\n')
-                
-            # Diccionario de patrones simplificados (solo el nombre)
             patrones_nombres = {
                 'Glucosa': r'\bGlucosa\b',
                 'Trigliceridos': r'\bTriglic[eé]ridos\b',
@@ -48,7 +43,7 @@ with tab1:
                 'MCH': r'\bHemoglobina corpuscular media\b|\bMCH\b',
                 'Cloruro': r'\bCloruro\b',
                 'Magnesio': r'\bMagnesio\b',
-                'Hb_libre': r'\bHemoglobina\b(?!\s*corpuscular|\s*glicosilada)', # Evita confundirse con Hb Glicosilada
+                'Hb_libre': r'\bHemoglobina\b(?!\s*corpuscular|\s*glicosilada)',
                 'Alfa_amilasa': r'\b(?:Alfa[- ]amilasa|amilasa)\b',
                 'PCR': r'\bProte[ií]na C reactiva\b|\bPCR\b'
             }
@@ -56,42 +51,30 @@ with tab1:
             variables_encontradas = 0
             for linea in lineas:
                 for clave, patron in patrones_nombres.items():
-                    # Si ya hemos encontrado este valor, lo ignoramos (Así coge la Albúmina en sangre y no la de orina)
                     if valores_extraidos[clave] is None:
                         match_nombre = re.search(patron, linea, re.IGNORECASE)
                         if match_nombre:
-                            # Recortamos la línea justo después del nombre para no leer números del propio nombre
                             linea_resto = linea[match_nombre.end():]
-                            # Capturamos el primer número de esa fila (ignorando asteriscos)
                             match_numero = re.search(r'(\d+[.,]\d+|\d+)', linea_resto)
                             if match_numero:
                                 valor_str = match_numero.group(1).replace(',', '.')
                                 valores_extraidos[clave] = float(valor_str)
                                 variables_encontradas += 1
-            
-            st.success(f"📄 Analítica procesada: Se han extraído {variables_encontradas} parámetros automáticamente.")
-            
+            st.success(f"📄 Analítica procesada: Se han extraído {variables_encontradas} parámetros.")
         except Exception as e:
             st.error(f"Error al leer el PDF: {e}")
 
     st.divider()
-    
     col1, col2, col3 = st.columns(3)
-    
     with col1:
-        st.subheader("Perfil Metabólico")
         glucosa = st.number_input("Glucosa (mg/dL)", value=valores_extraidos['Glucosa'])
         trigliceridos = st.number_input("Triglicéridos (mg/dL)", value=valores_extraidos['Trigliceridos'])
         colesterol = st.number_input("Colesterol Total (mg/dL)", value=valores_extraidos['Colesterol'])
-        
     with col2:
-        st.subheader("Perfil Hepático")
         colinesterasa = st.number_input("Colinesterasa (kU/L)", value=valores_extraidos['Colinesterasa'])
         gamma_gt = st.number_input("Gamma-GT (U/L)", value=valores_extraidos['Gamma_GT'])
         albumina = st.number_input("Albúmina (g/L)", value=valores_extraidos['Albumina'])
-        
     with col3:
-        st.subheader("Perfil Hemático / Otros")
         mch = st.number_input("MCH (pg)", value=valores_extraidos['MCH'])
         cloruro = st.number_input("Cloruro (mmol/L)", value=valores_extraidos['Cloruro'])
         magnesio = st.number_input("Magnesio (mmol/L)", value=valores_extraidos['Magnesio'])
@@ -106,46 +89,26 @@ with tab1:
             'PCR': pcr, 'Hemoglobina_libre': hemoglobina_libre, 'Magnesio': magnesio,
             'Gamma_GT': gamma_gt, 'MCH': mch, 'Colesterol': colesterol
         }
-        
         resultado = procesar_analitica_paciente(datos_paciente)
-        
         if resultado['estado'] == "ERROR":
             st.error(f"🛑 {resultado['mensaje']}")
         else:
             st.success("✅ " + resultado['mensaje'])
-            
             datos_limpios = resultado['datos_procesados']
             score = calcular_score_bruto(datos_limpios)
             alertas = evaluar_perfil_riesgo(datos_limpios)
-            
             st.divider()
             st.subheader("Resultados del Análisis Clínico")
-            
             col_res1, col_res2 = st.columns(2)
-            
             with col_res1:
                 st.metric(label="Score Bruto (Logístico)", value=score)
-                st.caption("Nota: Este número representa la suma ponderada temporal hasta validar la cohorte local.")
-            
             with col_res2:
                 if len(alertas) >= 3:
-                    st.error(f"🚨 ALTA SOSPECHA: {len(alertas)} de 5 marcadores en rango de riesgo.")
+                    st.error(f"🚨 ALTA SOSPECHA: {len(alertas)} de 5 marcadores en riesgo.")
                 elif len(alertas) > 0:
-                    st.warning(f"⚠️ RIESGO MODERADO/MIXTO: {len(alertas)} de 5 marcadores en rango de riesgo.")
+                    st.warning(f"⚠️ RIESGO MODERADO: {len(alertas)} marcadores en riesgo.")
                 else:
-                    st.success("🟢 BAJO RIESGO: Patrón bioquímico inconsistente con amiloidosis.")
-            
+                    st.success("🟢 BAJO RIESGO")
             if alertas:
-                st.markdown("**Marcadores detectados en rango de infiltración/congestión:**")
                 for alerta in alertas:
                     st.markdown(f"- {alerta}")
-
-with tab2:
-    st.header("Validación Retrospectiva de Cohorte")
-    st.markdown("Sube el archivo Excel o CSV anonimizado.")
-    archivo_subido = st.file_uploader("Selecciona un archivo (.xlsx, .csv)", type=["xlsx", "csv"])
-    
-    if archivo_subido is not None:
-        st.success("Archivo cargado correctamente. Listo para procesar.")
-        if st.button("Procesar Cohorte"):
-            st.warning("Función en desarrollo.")
