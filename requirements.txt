@@ -3,4 +3,4 @@ pandas
 numpy
 scikit-learn
 openpyxl
-PyPDF2
+pdfplumber
