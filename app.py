@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import re
-import PyPDF2
+import pdfplumber
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
 st.set_page_config(page_title="Amiloidosis-Score-Jaén", page_icon="🫀", layout="wide")
@@ -14,7 +14,7 @@ tab1, tab2 = st.tabs(["Calculadora Individual", "Validación por Lotes (Archivo)
 with tab1:
     st.header("Evaluación de Paciente Individual")
     
-    st.info("💡 Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
+    st.info("💡 Novedad: Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
     pdf_subido = st.file_uploader("Subir Analítica (PDF)", type=["pdf"])
     
     valores_extraidos = {
@@ -26,21 +26,24 @@ with tab1:
     
     if pdf_subido is not None:
         try:
-            lector = PyPDF2.PdfReader(pdf_subido)
             texto_completo = ""
-            for pagina in lector.pages:
-                texto_completo += pagina.extract_text()
+            # pdfplumber lee el documento respetando la estructura visual de las columnas
+            with pdfplumber.open(pdf_subido) as pdf:
+                for pagina in pdf.pages:
+                    texto = pagina.extract_text(layout=True)
+                    if texto:
+                        texto_completo += texto + "\n"
                 
             patrones = {
                 'Glucosa': r'\bGlucosa\b\D*?(\d+[.,]\d+|\d+)',
                 'Trigliceridos': r'\bTriglic[eé]ridos\b\D*?(\d+[.,]\d+|\d+)',
                 'Colesterol': r'\bColesterol(?: total)?\b\D*?(\d+[.,]\d+|\d+)',
                 'Colinesterasa': r'\bColinesterasa\b\D*?(\d+[.,]\d+|\d+)',
-                'Gamma_GT': r'(?:Gamma[\s-]*GT|Gamma[\s-]*glutamil[\s-]*transferasa)\D*?(\d+[.,]\d+|\d+)',                'Albumina': r'\bAlb[uú]mina\b\D*?(\d+[.,]\d+|\d+)',
+                'Gamma_GT': r'(?:Gamma[\s-]*GT|Gamma[\s-]*glutamil[\s-]*transferasa)\D*?(\d+[.,]\d+|\d+)',
+                'Albumina': r'\bAlb[uú]mina\b\D*?(\d+[.,]\d+|\d+)',
                 'MCH': r'\b(?:MCH|Hemoglobina corpuscular media)\b\D*?(\d+[.,]\d+|\d+)',
                 'Cloruro': r'\bCloruro\b\D*?(\d+[.,]\d+|\d+)',
                 'Magnesio': r'\bMagnesio\b\D*?(\d+[.,]\d+|\d+)',
-                # Usamos negative lookahead para que "Hemoglobina" no capture "Hemoglobina corpuscular"
                 'Hb_libre': r'\b(?:Hb libre|Hemoglobina libre|Hemoglobina(?!\scorpuscular))\b\D*?(\d+[.,]\d+|\d+)',
                 'Alfa_amilasa': r'\b(?:Alfa[- ]amilasa|amilasa)\b\D*?(\d+[.,]\d+|\d+)',
                 'PCR': r'\b(?:PCR|Prote[ií]na C reactiva)\b\D*?(\d+[.,]\d+|\d+)'
