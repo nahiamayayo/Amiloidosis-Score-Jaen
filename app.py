@@ -26,7 +26,7 @@ with tab1:
         'Hb_libre': None, 'Alfa_amilasa': None, 'PCR': None
     }
     
-    if pdf_subido is not None:
+if pdf_subido is not None:
         try:
             # Leer el PDF
             lector = PyPDF2.PdfReader(pdf_subido)
@@ -34,14 +34,33 @@ with tab1:
             for pagina in lector.pages:
                 texto_completo += pagina.extract_text()
                 
-            # Expresiones regulares básicas para buscar los valores (Esto se ajustará según el formato del hospital de Jaén)
-            match_glucosa = re.search(r'Glucosa.*?(\d+[.,]?\d*)', texto_completo, re.IGNORECASE)
-            if match_glucosa: valores_extraidos['Glucosa'] = float(match_glucosa.group(1).replace(',', '.'))
+            # Diccionario de patrones Regex adaptados al formato del Hospital de Jaén (SAS)
+            patrones = {
+                'Glucosa': r'Glucosa\D*?(\d+[.,]\d+|\d+)',
+                'Trigliceridos': r'Triglic[eé]ridos\D*?(\d+[.,]\d+|\d+)',
+                'Colesterol': r'Colesterol\D*?(\d+[.,]\d+|\d+)',
+                'Colinesterasa': r'Colinesterasa\D*?(\d+[.,]\d+|\d+)',
+                'Gamma_GT': r'Gamma glutamiltransferasa\D*?(\d+[.,]\d+|\d+)',
+                'Albumina': r'Alb[uú]mina\D*?(\d+[.,]\d+|\d+)',
+                'MCH': r'Hemoglobina corpuscular media\D*?(\d+[.,]\d+|\d+)',
+                'Cloruro': r'Cloruro\D*?(\d+[.,]\d+|\d+)',
+                'Magnesio': r'Magnesio\D*?(\d+[.,]\d+|\d+)',
+                'Hb_libre': r'Hemoglobina libre\D*?(\d+[.,]\d+|\d+)',
+                'Alfa_amilasa': r'amilasa\D*?(\d+[.,]\d+|\d+)',
+                'PCR': r'Prote[ií]na C reactiva\D*?(\d+[.,]\d+|\d+)'
+            }
+
+            # Extracción inteligente
+            variables_encontradas = 0
+            for clave, patron in patrones.items():
+                match = re.search(patron, texto_completo, re.IGNORECASE)
+                if match:
+                    # Extraer el número, cambiar coma por punto para Python, y convertir a float
+                    valor_str = match.group(1).replace(',', '.')
+                    valores_extraidos[clave] = float(valor_str)
+                    variables_encontradas += 1
             
-            match_trigliceridos = re.search(r'Triglic[eé]ridos.*?(\d+[.,]?\d*)', texto_completo, re.IGNORECASE)
-            if match_trigliceridos: valores_extraidos['Trigliceridos'] = float(match_trigliceridos.group(1).replace(',', '.'))
-            
-            st.success("Analítica procesada. Revisa que los valores extraídos sean correctos antes de calcular.")
+            st.success(f"📄 Analítica procesada: Se han extraído {variables_encontradas} parámetros automáticamente.")
             
         except Exception as e:
             st.error(f"Error al leer el PDF: {e}")
