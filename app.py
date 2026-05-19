@@ -14,7 +14,7 @@ tab1, tab2 = st.tabs(["Calculadora Individual", "Validación por Lotes (Archivo)
 with tab1:
     st.header("Evaluación de Paciente Individual")
     
-    st.info("💡 Novedad: Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
+    st.info("💡 Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
     pdf_subido = st.file_uploader("Subir Analítica (PDF)", type=["pdf"])
     
     valores_extraidos = {
@@ -32,18 +32,19 @@ with tab1:
                 texto_completo += pagina.extract_text()
                 
             patrones = {
-                'Glucosa': r'Glucosa\D*?(\d+[.,]\d+|\d+)',
-                'Trigliceridos': r'Triglic[eé]ridos\D*?(\d+[.,]\d+|\d+)',
-                'Colesterol': r'Colesterol\D*?(\d+[.,]\d+|\d+)',
-                'Colinesterasa': r'Colinesterasa\D*?(\d+[.,]\d+|\d+)',
-                'Gamma_GT': r'Gamma glutamiltransferasa\D*?(\d+[.,]\d+|\d+)',
-                'Albumina': r'Alb[uú]mina\D*?(\d+[.,]\d+|\d+)',
-                'MCH': r'Hemoglobina corpuscular media\D*?(\d+[.,]\d+|\d+)',
-                'Cloruro': r'Cloruro\D*?(\d+[.,]\d+|\d+)',
-                'Magnesio': r'Magnesio\D*?(\d+[.,]\d+|\d+)',
-                'Hb_libre': r'Hemoglobina libre\D*?(\d+[.,]\d+|\d+)',
-                'Alfa_amilasa': r'amilasa\D*?(\d+[.,]\d+|\d+)',
-                'PCR': r'Prote[ií]na C reactiva\D*?(\d+[.,]\d+|\d+)'
+                'Glucosa': r'\bGlucosa\b\D*?(\d+[.,]\d+|\d+)',
+                'Trigliceridos': r'\bTriglic[eé]ridos\b\D*?(\d+[.,]\d+|\d+)',
+                'Colesterol': r'\bColesterol(?: total)?\b\D*?(\d+[.,]\d+|\d+)',
+                'Colinesterasa': r'\bColinesterasa\b\D*?(\d+[.,]\d+|\d+)',
+                'Gamma_GT': r'\b(?:Gamma[- ]GT|Gamma[- ]glutamil[\s-]?transferasa)\b\D*?(\d+[.,]\d+|\d+)',
+                'Albumina': r'\bAlb[uú]mina\b\D*?(\d+[.,]\d+|\d+)',
+                'MCH': r'\b(?:MCH|Hemoglobina corpuscular media)\b\D*?(\d+[.,]\d+|\d+)',
+                'Cloruro': r'\bCloruro\b\D*?(\d+[.,]\d+|\d+)',
+                'Magnesio': r'\bMagnesio\b\D*?(\d+[.,]\d+|\d+)',
+                # Usamos negative lookahead para que "Hemoglobina" no capture "Hemoglobina corpuscular"
+                'Hb_libre': r'\b(?:Hb libre|Hemoglobina libre|Hemoglobina(?!\scorpuscular))\b\D*?(\d+[.,]\d+|\d+)',
+                'Alfa_amilasa': r'\b(?:Alfa[- ]amilasa|amilasa)\b\D*?(\d+[.,]\d+|\d+)',
+                'PCR': r'\b(?:PCR|Prote[ií]na C reactiva)\b\D*?(\d+[.,]\d+|\d+)'
             }
 
             variables_encontradas = 0
