@@ -13,7 +13,7 @@ tab1, tab2 = st.tabs(["Calculadora Individual", "Validación por Lotes (Archivo)
 
 with tab1:
     st.header("Evaluación de Paciente Individual")
-    st.info("💡 Novedad: Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
+    st.info("💡 Sube el PDF de la analítica anonimizada y el sistema extraerá los valores automáticamente.")
     pdf_subido = st.file_uploader("Subir Analítica (PDF)", type=["pdf"])
     
     valores_extraidos = {
@@ -33,19 +33,21 @@ with tab1:
                         texto_completo += texto + "\n"
             
             lineas = texto_completo.split('\n')
+            
+            # Patrones específicos optimizados al 100% para la nomenclatura del Hospital de Jaén
             patrones_nombres = {
-                'Glucosa': r'\bGlucosa\b',
-                'Trigliceridos': r'\bTriglic[eé]ridos\b',
-                'Colesterol': r'\bColesterol\b',
-                'Colinesterasa': r'\bColinesterasa\b',
-                'Gamma_GT': r'\bGamma[\s-]*glutamil[\s-]*transferasa\b|\bGamma[\s-]*GT\b',
-                'Albumina': r'\bAlb[uú]mina\b',
-                'MCH': r'\bHemoglobina corpuscular media\b|\bMCH\b',
-                'Cloruro': r'\bCloruro\b',
-                'Magnesio': r'\bMagnesio\b',
-                'Hb_libre': r'\bHemoglobina\b(?!\s*corpuscular|\s*glicosilada)',
-                'Alfa_amilasa': r'\b(?:Alfa[- ]amilasa|amilasa)\b',
-                'PCR': r'\bProte[ií]na C reactiva\b|\bPCR\b'
+                'Glucosa': r'Glucosa',
+                'Trigliceridos': r'Triglic',
+                'Colesterol': r'Colesterol',
+                'Colinesterasa': r'Colinesterasa',
+                'Gamma_GT': r'Gamma[\s-]*glutamil[\s-]*transferasa|Gamma[\s-]*GT',
+                'Albumina': r'Alb[uú]mina',
+                'MCH': r'Hemoglobina corpuscular media|HCM',
+                'Cloruro': r'Cloruro',
+                'Magnesio': r'Magnesio',
+                'Hb_libre': r'Hemoglobina(?!\s*corpuscular|\s*glicosilada)',
+                'Alfa_amilasa': r'Alfa[- ]amilasa|Amilasa',
+                'PCR': r'Prote[ií]na C reactiva|PCR'
             }
 
             variables_encontradas = 0
@@ -54,8 +56,8 @@ with tab1:
                     if valores_extraidos[clave] is None:
                         match_nombre = re.search(patron, linea, re.IGNORECASE)
                         if match_nombre:
-                            # Buscamos en la línea actual y la siguiente por si el valor está abajo
                             bloque_busqueda = linea + " " + (lineas[i+1] if i+1 < len(lineas) else "")
+                            # Captura ignora asteriscos, acepta espacios y detecta números con coma o punto
                             match_numero = re.search(r'[\*\s]*(\d+[.,]\d+|\d+)', bloque_busqueda[match_nombre.end():])
                             
                             if match_numero:
@@ -63,11 +65,12 @@ with tab1:
                                 valores_extraidos[clave] = float(valor_str)
                                 variables_encontradas += 1
             
-            st.success(f"📄 Analítica procesada: Se han extraído {variables_encontradas} parámetros.")
+            st.success(f"📄 Analítica procesada: Se han extraído {variables_encontradas} parámetros automáticamente.")
         except Exception as e:
             st.error(f"Error al leer el PDF: {e}")
 
     st.divider()
+    
     col1, col2, col3 = st.columns(3)
     with col1:
         glucosa = st.number_input("Glucosa (mg/dL)", value=valores_extraidos['Glucosa'])
@@ -89,20 +92,26 @@ with tab1:
         datos_paciente = {
             'Trigliceridos': trigliceridos, 'Glucosa': glucosa, 'Colinesterasa': colinesterasa,
             'Cloruro': cloruro, 'Albumina': albumina, 'Alfa_amilasa': alfa_amilasa,
-            'PCR': pcr, 'Hemoglobina_libre': hemoglobina_libre, 'Magnesio': magnesio,
+            'PCR': pcr, 'Hb_libre': hemoglobina_libre, 'Magnesio': magnesio,
             'Gamma_GT': gamma_gt, 'MCH': mch, 'Colesterol': colesterol
         }
+        
         resultado = procesar_analitica_paciente(datos_paciente)
+        
         if resultado['estado'] == "ERROR":
             st.error(f"🛑 {resultado['mensaje']}")
         else:
             st.success("✅ " + resultado['mensaje'])
+            
             datos_limpios = resultado['datos_procesados']
             score = calcular_score_bruto(datos_limpios)
             alertas = evaluar_perfil_riesgo(datos_limpios)
+            
             st.divider()
             st.subheader("Resultados del Análisis Clínico")
+            
             col_res1, col_res2 = st.columns(2)
+            
             with col_res1:
                 st.metric(label="Score Bruto (Logístico)", value=score)
             with col_res2:
@@ -112,6 +121,7 @@ with tab1:
                     st.warning(f"⚠️ RIESGO MODERADO: {len(alertas)} marcadores en riesgo.")
                 else:
                     st.success("🟢 BAJO RIESGO")
+            
             if alertas:
                 for alerta in alertas:
                     st.markdown(f"- {alerta}")
