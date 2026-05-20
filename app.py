@@ -34,32 +34,37 @@ with tab1:
             
             lineas = texto_completo.split('\n')
             
-            # Patrones específicos optimizados al 100% para la nomenclatura del Hospital de Jaén
+            # Diccionario blindado contra espacios extraños en PDFs (\s+ admite cualquier cantidad de espacios)
             patrones_nombres = {
                 'Glucosa': r'Glucosa',
-                'Trigliceridos': r'Triglic',
+                'Trigliceridos': r'Triglic[eé]ridos|Triglic',
                 'Colesterol': r'Colesterol',
                 'Colinesterasa': r'Colinesterasa',
-                'Gamma_GT': r'Gamma[\s-]*glutamil[\s-]*transferasa|Gamma[\s-]*GT',
+                'Gamma_GT': r'Gamma[\s-]*glutamil[\s-]*transferasa|Gamma[\s-]*GT|G\.G\.T',
                 'Albumina': r'Alb[uú]mina',
-                'MCH': r'Hemoglobina corpuscular media|HCM',
+                'MCH': r'Hemoglobina\s+corpuscular\s+media|HCM',
                 'Cloruro': r'Cloruro',
                 'Magnesio': r'Magnesio',
                 'Hb_libre': r'Hemoglobina(?!\s*corpuscular|\s*glicosilada)',
-                'Alfa_amilasa': r'Alfa[- ]amilasa|Amilasa',
-                'PCR': r'Prote[ií]na C reactiva|PCR'
+                'Alfa_amilasa': r'Alfa[\s-]*amilasa|Amilasa',
+                'PCR': r'Prote[ií]na\s+C\s+reactiva|PCR'
             }
 
             variables_encontradas = 0
+            
             for i, linea in enumerate(lineas):
                 for clave, patron in patrones_nombres.items():
                     if valores_extraidos[clave] is None:
                         match_nombre = re.search(patron, linea, re.IGNORECASE)
                         if match_nombre:
-                            bloque_busqueda = linea + " " + (lineas[i+1] if i+1 < len(lineas) else "")
-                            # Captura ignora asteriscos, acepta espacios y detecta números con coma o punto
-                            match_numero = re.search(r'[\*\s]*(\d+[.,]\d+|\d+)', bloque_busqueda[match_nombre.end():])
+                            # Busca el primer número en lo que queda de la línea tras encontrar el nombre
+                            linea_resto = linea[match_nombre.end():]
+                            match_numero = re.search(r'(\d+[.,]\d+|\d+)', linea_resto)
                             
+                            # Si la línea se ha cortado visualmente y no hay número, busca en la línea de abajo
+                            if not match_numero and i + 1 < len(lineas):
+                                match_numero = re.search(r'(\d+[.,]\d+|\d+)', lineas[i+1])
+                                
                             if match_numero:
                                 valor_str = match_numero.group(1).replace(',', '.')
                                 valores_extraidos[clave] = float(valor_str)
@@ -125,3 +130,13 @@ with tab1:
             if alertas:
                 for alerta in alertas:
                     st.markdown(f"- {alerta}")
+
+with tab2:
+    st.header("Validación Retrospectiva de Cohorte")
+    st.markdown("Sube el archivo Excel o CSV anonimizado.")
+    archivo_subido = st.file_uploader("Selecciona un archivo (.xlsx, .csv)", type=["xlsx", "csv"])
+    
+    if archivo_subido is not None:
+        st.success("Archivo cargado correctamente. Listo para procesar.")
+        if st.button("Procesar Cohorte"):
+            st.warning("Función en desarrollo.")
