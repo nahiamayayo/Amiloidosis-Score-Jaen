@@ -9,7 +9,7 @@ from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, e
 st.set_page_config(
     page_title="Amiloidosis-Score-Jaén", 
     page_icon="🫀", 
-    layout="centered",  # Centrado para emular una aplicación de escritorio clásica
+    layout="centered",  
     initial_sidebar_state="collapsed"
 )
 
@@ -19,6 +19,13 @@ st.markdown("""
     /* Fondo general de la aplicación */
     .stApp {
         background-color: #f7faf8;
+    }
+    
+    /* EVITAR RECORTE DEL LOGO: Forzar bordes rectos y visualización completa */
+    div[data-testid="stImage"] img {
+        border-radius: 0px !important;
+        object-fit: contain !important;
+        box-shadow: none !important;
     }
     
     /* Personalización de los botones principales */
@@ -60,7 +67,7 @@ st.markdown("""
     div[data-testid="metric-container"] {
         background-color: #ffffff;
         border: 2px solid #e2e8f0;
-        border-left: 6px solid #0b5a32; /* Detalle en verde corporativo */
+        border-left: 6px solid #0b5a32;
         padding: 24px;
         border-radius: 12px;
         box-shadow: 0px 4px 12px rgba(0,0,0,0.03);
@@ -90,8 +97,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- CABECERA PRINCIPAL (DISEÑO CENTRALIZADO) ---
-# Usamos columnas para integrar de forma elegante el logotipo al lado del título institucional
-header_col1, header_col2 = st.columns([1, 4])
+# Hemos ampliado la columna del texto a un ratio de 6 para dar máximo margen horizontal
+header_col1, header_col2 = st.columns([1, 6])
 
 with header_col1:
     if os.path.exists("huj.png"):
@@ -101,7 +108,8 @@ with header_col1:
 
 with header_col2:
     st.title("Amiloidosis-Score-Jaén")
-    st.markdown("<p style='color: #718096; font-size: 1.1rem; margin-top: -10px;'>Plataforma Digital de Cribado de Amiloidosis Cardíaca | Unidad de Cardiología</p>", unsafe_allow_html=True)
+    # 'white-space: nowrap' impide de manera absoluta que el texto se rompa en varios párrafos
+    st.markdown("<p style='color: #718096; font-size: 1.05rem; margin-top: -6px; white-space: nowrap;'>Plataforma Digital de Cribado de Amiloidosis Cardíaca | Unidad de Cardiología</p>", unsafe_allow_html=True)
 
 st.markdown("---")
 
