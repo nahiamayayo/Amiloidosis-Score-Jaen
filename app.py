@@ -2,62 +2,69 @@ import streamlit as st
 import pandas as pd
 import re
 import pdfplumber
+import os
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
-# Configuración inicial de la página (DEBE ser la primera línea de Streamlit)
+# Configuración inicial de la página (Obligatoriamente la primera orden de Streamlit)
 st.set_page_config(page_title="Amiloidosis-Score", page_icon="🫀", layout="wide", initial_sidebar_state="expanded")
 
-# --- INYECCIÓN DE CSS PERSONALIZADO (DISEÑO CLÍNICO) ---
+# --- INYECCIÓN DE CSS PERSONALIZADO (DISEÑO CLÍNICO PROFESIONAL) ---
 st.markdown("""
 <style>
-    /* Fondo general más limpio */
+    /* Fondo general gris perla clínico */
     .stApp {
         background-color: #f8f9fa;
     }
-    /* Estilo de tarjeta para las métricas (Score) */
+    /* Diseño de tarjeta flotante para el Score Bruto */
     div[data-testid="metric-container"] {
         background-color: #ffffff;
         border: 1px solid #e0e0e0;
         padding: 20px;
-        border-radius: 10px;
-        box-shadow: 2px 2px 10px rgba(0,0,0,0.05);
+        border-radius: 12px;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.05);
         text-align: center;
     }
-    /* Títulos institucionales */
+    /* Títulos con tipografía limpia y color corporativo */
     h1, h2, h3 {
-        color: #2c3e50;
-        font-family: 'Helvetica Neue', sans-serif;
+        color: #1e3d59;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        font-weight: 600;
     }
-    /* Alertas de Streamlit más redondeadas */
+    /* Suavizado de las alertas fijas */
     .stAlert {
         border-radius: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- BARRA LATERAL (SIDEBAR) INSTITUCIONAL ---
+# --- BARRA LATERAL INSTITUTIONAL CON TU LOGO ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/2966/2966327.png", width=80) # Icono genérico médico (puedes cambiarlo por el logo de tu uni/hospital)
-    st.title("Unidad de Cardiología")
+    # Intenta cargar el logo local subido a GitHub; si no está, usa un respaldo limpio
+    if os.path.exists("huj.png"):
+        st.image("huj.png", use_container_width=True)
+    else:
+        st.image("https://cdn-icons-png.flaticon.com/512/2966/2966327.png", width=70)
+        st.caption("⚠️ Sube 'huj.png' a GitHub para activar el logotipo oficial.")
+    
+    st.markdown("<h3 style='text-align: center; margin-top: 0;'>U. de Cardiología</h3>", unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("**Sistema Inteligente de Cribado**")
-    st.markdown("Proyecto de validación retrospectiva para la detección temprana de Amiloidosis Cardíaca mediante analítica de rutina.")
+    st.markdown("**Cribado Bioinformático Inteligente**")
+    st.markdown("Algoritmo de detección temprana de Amiloidosis Cardíaca mediante patrones analíticos de rutina.")
     st.markdown("---")
-    st.caption("Versión: 1.0 (Prototipo Clínico)")
+    st.caption("Hospital Universitario de Jaén\nVersión 1.1 Prototipo Clínico")
 
 # --- CABECERA PRINCIPAL ---
 st.title("🫀 Amiloidosis-Score-Jaén")
-st.markdown("Bienvenido al sistema automatizado de triaje. Sube un informe de laboratorio para iniciar la evaluación del paciente.")
+st.markdown("Herramienta de triaje automatizado orientada a optimizar la derivación diagnóstica.")
 
-# --- PESTAÑAS ---
+# --- PESTAÑAS DE TRABAJO ---
 tab1, tab2 = st.tabs(["📋 Evaluación Individual", "📊 Validación por Lotes (Cohorte)"])
 
 with tab1:
-    st.subheader("Paso 1: Extracción Automática")
+    st.subheader("Paso 1: Extracción Digital de Parámetros")
     
-    # Contenedor visual para la subida del PDF
-    with st.container():
-        pdf_subido = st.file_uploader("Arrastra aquí el PDF de la analítica del SAS", type=["pdf"])
+    # Módulo de carga de analíticas
+    pdf_subido = st.file_uploader("Arrastra aquí el PDF anonimizado del laboratorio del SAS", type=["pdf"])
     
     valores_extraidos = {
         'Glucosa': None, 'Trigliceridos': None, 'Colesterol': None,
@@ -75,6 +82,7 @@ with tab1:
                     if texto:
                         texto_completo += texto + "\n"
             
+            # El motor de búsqueda global que logramos calibrar con éxito
             patrones_nombres = {
                 'Glucosa': r'Glucosa',
                 'Trigliceridos': r'Triglic[eé]ridos|Triglic',
@@ -100,12 +108,12 @@ with tab1:
                         valores_extraidos[clave] = float(valor_str)
                         variables_encontradas += 1
             
-            st.success(f"✅ Extracción completada: {variables_encontradas}/12 parámetros localizados.")
+            st.success(f"🧬 Extracción completada con éxito: {variables_encontradas}/12 parámetros localizados.")
         except Exception as e:
-            st.error(f"Error al leer el PDF: {e}")
+            st.error(f"Error en el procesamiento del PDF: {e}")
 
-    # Acordeón para la edición manual (Mantiene la UI limpia)
-    with st.expander("🛠️ Ver / Editar parámetros extraídos manualmente", expanded=(pdf_subido is None)):
+    # Panel de control de datos (Escondido ordenadamente en un acordeón)
+    with st.expander("🛠️ Revisar / Modificar manualmente los valores del laboratorio", expanded=(pdf_subido is None)):
         col1, col2, col3 = st.columns(3)
         with col1:
             glucosa = st.number_input("Glucosa (mg/dL)", value=valores_extraidos['Glucosa'])
@@ -125,10 +133,10 @@ with tab1:
 
     st.markdown("---")
     
-    # Botón centrado y destacado
+    # Botón principal de ejecución
     col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
     with col_btn2:
-        calcular = st.button("🧬 Ejecutar Algoritmo de Riesgo", type="primary", use_container_width=True)
+        calcular = st.button("🧬 Analizar Perfil Bioquímico", type="primary", use_container_width=True)
 
     if calcular:
         datos_paciente = {
@@ -152,23 +160,22 @@ with tab1:
             score = calcular_score_bruto(datos_limpios)
             alertas = evaluar_perfil_riesgo(datos_limpios)
             
-            st.markdown("### 📋 Informe de Resultados")
+            st.markdown("### 📋 Informe Estadístico y Clínico")
             
-            # Distribución visual de resultados
             res_col1, res_col2 = st.columns([1, 2])
             
             with res_col1:
-                st.metric(label="Score Logístico (Puntuación Bruta)", value=score)
-                st.caption("Pendiente de calibración de corte local.")
+                st.metric(label="Score Logístico Bruto", value=score)
+                st.caption("Puntuación lineal sujeta a ajuste por intercepto local.")
                 
             with res_col2:
-                st.markdown("#### Perfil de Riesgo Clínico")
+                st.markdown("#### Estratificación del Paciente")
                 if len(alertas) >= 3:
-                    st.error(f"🚨 **ALTA SOSPECHA:** {len(alertas)} de 5 marcadores en riesgo.")
+                    st.error(f"🚨 **ALTA SOSPECHA BIOMÉDICA:** {len(alertas)} marcadores core alterados.")
                 elif len(alertas) > 0:
-                    st.warning(f"⚠️ **RIESGO MODERADO:** {len(alertas)} marcadores en riesgo.")
+                    st.warning(f"⚠️ **RIESGO MODERADO:** {len(alertas)} marcadores en ventana de riesgo.")
                 else:
-                    st.success("🟢 **BAJO RIESGO:** Patrón bioquímico normal.")
+                    st.success("🟢 **BAJO RIESGO:** Firma bioquímica compatible con control sano.")
                 
                 if alertas:
                     for alerta in alertas:
@@ -176,10 +183,10 @@ with tab1:
 
 with tab2:
     st.header("Validación Retrospectiva de Cohorte")
-    st.markdown("Sube el archivo Excel `.xlsx` o `.csv` anonimizado con la cohorte local para calibrar la regresión logística.")
+    st.markdown("Sube el archivo Excel `.xlsx` o `.csv` anonimizado con la cohorte histórica del hospital para entrenar la constante de calibración local.")
     archivo_subido = st.file_uploader("Selecciona la base de datos de pacientes", type=["xlsx", "csv"])
     
     if archivo_subido is not None:
-        st.success("Base de datos en memoria. Lista para el análisis.")
-        if st.button("🚀 Iniciar Calibración de Modelo"):
-            st.info("Módulo de aprendizaje en desarrollo.")
+        st.success("Base de datos cargada en memoria. Registros listos para computar.")
+        if st.button("🚀 Ejecutar Ajuste de Regresión Logística"):
+            st.info("Módulo de calibración multivariante y generación de curva ROC en desarrollo.")
