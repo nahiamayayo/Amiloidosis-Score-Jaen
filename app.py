@@ -27,11 +27,19 @@ st.markdown("""
         padding-top: 2rem !important;
     }
     
-    /* EVITAR RECORTE DEL LOGO */
+    /* EVITAR RECORTE Y CONTROLAR ALTURA DEL LOGO (ACTUALIZADO) */
+    div[data-testid="stImage"] {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: visible !important;
+    }
     div[data-testid="stImage"] img {
         border-radius: 0px !important;
         object-fit: contain !important;
         box-shadow: none !important;
+        max-height: 85px !important;
+        width: auto !important;
     }
     
     /* Personalización de los botones principales */
@@ -52,7 +60,6 @@ st.markdown("""
     }
     
     /* --- DISEÑO DE PESTAÑAS (Eliminando la línea roja) --- */
-    /* Ocultar la línea roja brillante (highlight) de Streamlit */
     div[data-baseweb="tab-highlight"] {
         display: none !important;
     }
@@ -68,7 +75,6 @@ st.markdown("""
         font-weight: 500;
         color: #718096;
     }
-    /* Estilo de la pestaña activa en verde corporativo */
     .stTabs [aria-selected="true"] {
         color: #0b5a32 !important;
         border-bottom: 3px solid #0b5a32 !important;
@@ -109,21 +115,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- CABECERA PRINCIPAL (DISEÑO AMPLIO) ---
-header_col1, header_col2 = st.columns([1, 6])
+# --- CABECERA PRINCIPAL (DISEÑO AMPLIO Y ALINEADO) ---
+# Ajustamos a [1.2, 6] para dar más espacio al logo y añadimos alineación vertical centrada
+header_col1, header_col2 = st.columns([1.2, 6], vertical_alignment="center")
 
 with header_col1:
     if os.path.exists("huj.png"):
-        st.image("huj.png", width=140) # Ancho fijo para que no se deforme
+        # Usamos el ancho del contenedor en lugar de píxeles fijos
+        st.image("huj.png", use_container_width=True) 
     else:
         st.warning("Logo")
 
 with header_col2:
     st.title("Amiloidosis-Score-Jaén")
     st.markdown("<p style='color: #718096; font-size: 1.1rem; margin-top: -6px;'>Plataforma Digital de Cribado de Amiloidosis Cardíaca | Unidad de Cardiología</p>", unsafe_allow_html=True)
-
-st.write("") # Espacio en blanco para respirar
-st.markdown("---")
 
 # --- PESTAÑAS DE TRABAJO ---
 tab1, tab2 = st.tabs(["📋 Evaluación de Paciente Individual", "📊 Validación Retrospectiva por Lotes"])
