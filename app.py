@@ -32,43 +32,38 @@ with tab1:
                     if texto:
                         texto_completo += texto + "\n"
             
-            lineas = texto_completo.split('\n')
-            
-            # Diccionario blindado contra espacios extraños en PDFs (\s+ admite cualquier cantidad de espacios)
+            # Patrones ajustados EXACTAMENTE a tus capturas
             patrones_nombres = {
                 'Glucosa': r'Glucosa',
                 'Trigliceridos': r'Triglic[eé]ridos|Triglic',
                 'Colesterol': r'Colesterol',
                 'Colinesterasa': r'Colinesterasa',
-                'Gamma_GT': r'Gamma[\s-]*glutamil[\s-]*transferasa|Gamma[\s-]*GT|G\.G\.T',
+                'Gamma_GT': r'Gamma\s*glutamiltransferasa|Gamma[\s-]*GT|G\.G\.T',
                 'Albumina': r'Alb[uú]mina',
-                'MCH': r'Hemoglobina\s+corpuscular\s+media|HCM',
+                'MCH': r'Hemoglobina\s*corpuscular\s*media|HCM',
                 'Cloruro': r'Cloruro',
                 'Magnesio': r'Magnesio',
-                'Hb_libre': r'Hemoglobina(?!\s*corpuscular|\s*glicosilada)',
+                'Hb_libre': r'Hemoglobina(?!\s*glicosilada|\s*corpuscular)',
                 'Alfa_amilasa': r'Alfa[\s-]*amilasa|Amilasa',
-                'PCR': r'Prote[ií]na\s+C\s+reactiva|PCR'
+                'PCR': r'Prote[ií]na\s*C\s*reactiva|PCR'
             }
 
             variables_encontradas = 0
             
-            for i, linea in enumerate(lineas):
-                for clave, patron in patrones_nombres.items():
-                    if valores_extraidos[clave] is None:
-                        match_nombre = re.search(patron, linea, re.IGNORECASE)
-                        if match_nombre:
-                            # Busca el primer número en lo que queda de la línea tras encontrar el nombre
-                            linea_resto = linea[match_nombre.end():]
-                            match_numero = re.search(r'(\d+[.,]\d+|\d+)', linea_resto)
-                            
-                            # Si la línea se ha cortado visualmente y no hay número, busca en la línea de abajo
-                            if not match_numero and i + 1 < len(lineas):
-                                match_numero = re.search(r'(\d+[.,]\d+|\d+)', lineas[i+1])
-                                
-                            if match_numero:
-                                valor_str = match_numero.group(1).replace(',', '.')
-                                valores_extraidos[clave] = float(valor_str)
-                                variables_encontradas += 1
+            # Búsqueda en bloque global (El método infalible)
+            for clave, patron in patrones_nombres.items():
+                if valores_extraidos[clave] is None:
+                    # Magia Regex: (?:patron) busca el nombre. 
+                    # [^\dA-Za-z]* ignora todo lo que NO sea letra o número (espacios, *, tabuladores, saltos)
+                    # (\d+[.,]\d+|\d+) captura el primer número exacto.
+                    regex = rf"(?:{patron})[^\dA-Za-z]*(\d+[.,]\d+|\d+)"
+                    
+                    match = re.search(regex, texto_completo, re.IGNORECASE)
+                    
+                    if match:
+                        valor_str = match.group(1).replace(',', '.')
+                        valores_extraidos[clave] = float(valor_str)
+                        variables_encontradas += 1
             
             st.success(f"📄 Analítica procesada: Se han extraído {variables_encontradas} parámetros automáticamente.")
         except Exception as e:
