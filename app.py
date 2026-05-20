@@ -135,7 +135,7 @@ tab1, tab2 = st.tabs(["📋 Evaluación de Paciente Individual", "📊 Validaci�
 
 with tab1:
     st.write("")
-    st.markdown("### 1. Carga de Datos Clínicos")
+    st.markdown("### Carga de Datos Clínicos")
     st.markdown("Sube la analítica de rutina anonimizada del paciente en formato PDF. El sistema analizará el documento de manera automatizada.")
     
     pdf_subido = st.file_uploader("", type=["pdf"], label_visibility="collapsed")
