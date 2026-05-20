@@ -5,11 +5,11 @@ import pdfplumber
 import os
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
-# Configuración de la página (Debe ser la primera orden de Streamlit)
+# Configuración de la página: Cambiamos a 'wide' para que no se vea tan condensado
 st.set_page_config(
     page_title="Amiloidosis-Score-Jaén", 
     page_icon="🫀", 
-    layout="centered",  
+    layout="wide",  
     initial_sidebar_state="collapsed"
 )
 
@@ -21,7 +21,13 @@ st.markdown("""
         background-color: #f7faf8;
     }
     
-    /* EVITAR RECORTE DEL LOGO: Forzar bordes rectos y visualización completa */
+    /* Controlar el ancho máximo para que sea amplio pero no infinito */
+    .block-container {
+        max-width: 1100px !important;
+        padding-top: 2rem !important;
+    }
+    
+    /* EVITAR RECORTE DEL LOGO */
     div[data-testid="stImage"] img {
         border-radius: 0px !important;
         object-fit: contain !important;
@@ -45,22 +51,29 @@ st.markdown("""
         box-shadow: 0px 6px 12px rgba(11, 90, 50, 0.25) !important;
     }
     
-    /* Contenedores de las pestañas (Tabs) */
+    /* --- DISEÑO DE PESTAÑAS (Eliminando la línea roja) --- */
+    /* Ocultar la línea roja brillante (highlight) de Streamlit */
+    div[data-baseweb="tab-highlight"] {
+        display: none !important;
+    }
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+        gap: 10px;
+        border-bottom: 2px solid #e2e8f0;
     }
     .stTabs [data-baseweb="tab"] {
-        background-color: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px 6px 0px 0px;
-        padding: 8px 16px;
+        background-color: transparent;
+        border: none;
+        border-bottom: 3px solid transparent;
+        padding: 10px 20px;
         font-weight: 500;
-        color: #4a5568;
+        color: #718096;
     }
+    /* Estilo de la pestaña activa en verde corporativo */
     .stTabs [aria-selected="true"] {
-        background-color: #0b5a32 !important;
-        color: white !important;
-        border-color: #0b5a32 !important;
+        color: #0b5a32 !important;
+        border-bottom: 3px solid #0b5a32 !important;
+        background-color: transparent !important;
+        font-weight: 700 !important;
     }
 
     /* Tarjeta flotante para el Score Médico */
@@ -91,32 +104,32 @@ st.markdown("""
         background-color: #ffffff;
         border: 2px dashed #cbd5e1;
         border-radius: 12px;
-        padding: 10px;
+        padding: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# --- CABECERA PRINCIPAL (DISEÑO CENTRALIZADO) ---
-# Hemos ampliado la columna del texto a un ratio de 6 para dar máximo margen horizontal
+# --- CABECERA PRINCIPAL (DISEÑO AMPLIO) ---
 header_col1, header_col2 = st.columns([1, 6])
 
 with header_col1:
     if os.path.exists("huj.png"):
-        st.image("huj.png", use_container_width=True)
+        st.image("huj.png", width=140) # Ancho fijo para que no se deforme
     else:
         st.warning("Logo")
 
 with header_col2:
     st.title("Amiloidosis-Score-Jaén")
-    # 'white-space: nowrap' impide de manera absoluta que el texto se rompa en varios párrafos
-    st.markdown("<p style='color: #718096; font-size: 1.05rem; margin-top: -6px; white-space: nowrap;'>Plataforma Digital de Cribado de Amiloidosis Cardíaca | Unidad de Cardiología</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #718096; font-size: 1.1rem; margin-top: -6px;'>Plataforma Digital de Cribado de Amiloidosis Cardíaca | Unidad de Cardiología</p>", unsafe_allow_html=True)
 
+st.write("") # Espacio en blanco para respirar
 st.markdown("---")
 
 # --- PESTAÑAS DE TRABAJO ---
 tab1, tab2 = st.tabs(["📋 Evaluación de Paciente Individual", "📊 Validación Retrospectiva por Lotes"])
 
 with tab1:
+    st.write("")
     st.markdown("### 1. Carga de Datos Clínicos")
     st.markdown("Sube la analítica de rutina anonimizada del paciente en formato PDF. El sistema analizará el documento de manera automatizada.")
     
@@ -167,10 +180,11 @@ with tab1:
         except Exception as e:
             st.error(f"Error en la lectura automatizada del documento: {e}")
 
-    # Acordeón integrado para revisión manual
+    # Acordeón integrado para revisión manual (con más aire entre columnas)
+    st.write("")
     with st.expander("🛠️ Ver y verificar valores bioquímicos extraídos", expanded=(pdf_subido is None)):
-        st.markdown("<p style='color: #4a5568; font-size: 0.9rem;'>Modifica o introduce valores si el parámetro no constaba en el PDF original:</p>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3)
+        st.markdown("<p style='color: #4a5568; font-size: 0.95rem; margin-bottom: 15px;'>Modifica o introduce valores si el parámetro no constaba en el PDF original:</p>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns(3, gap="large") # gap="large" da mucho más espacio horizontal
         with col1:
             glucosa = st.number_input("Glucosa (mg/dL)", value=valores_extraidos['Glucosa'])
             trigliceridos = st.number_input("Triglicéridos (mg/dL)", value=valores_extraidos['Trigliceridos'])
@@ -187,10 +201,14 @@ with tab1:
             alfa_amilasa = st.number_input("Alfa-amilasa (U/L)", value=valores_extraidos['Alfa_amilasa'])
             pcr = st.number_input("PCR (mg/dL)", value=valores_extraidos['PCR'])
 
+    st.write("")
     st.markdown("---")
+    st.write("")
     
-    # Botón centrado institucional
-    calcular = st.button("🧬 Computar Análisis Computacional de Riesgo", use_container_width=True)
+    # Botón centrado usando columnas vacías a los lados
+    col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+    with col_btn2:
+        calcular = st.button("🧬 Computar Análisis Computacional de Riesgo", use_container_width=True)
 
     if calcular:
         datos_paciente = {
@@ -214,13 +232,14 @@ with tab1:
             score = calcular_score_bruto(datos_limpios)
             alertas = evaluar_perfil_riesgo(datos_limpios)
             
+            st.write("")
             st.markdown("### 📋 Informe Clínico de Cribado")
             
-            res_col1, res_col2 = st.columns([1, 2])
+            res_col1, res_col2 = st.columns([1, 2], gap="large")
             
             with res_col1:
                 st.metric(label="Score Logístico Bruto", value=score)
-                st.caption("Puntuación matemática sujeta a calibración por cohorte local de Jaén.")
+                st.caption("Puntuación matemática sujeta a calibración local.")
                 
             with res_col2:
                 st.markdown("#### Estratificación del Paciente")
@@ -229,14 +248,16 @@ with tab1:
                 elif len(alertas) > 0:
                     st.warning(f"⚠️ **RIESGO MODERADO:** {len(alertas)} variables en rango de sospecha.")
                 else:
-                    st.success("🟢 **BAJO RIESGO:** Patrón bioquímico coincidente con el modelo de control sano.")
+                    st.success("🟢 **BAJO RIESGO:** Patrón bioquímico coincidente con control sano.")
                 
                 if alertas:
-                    st.markdown("<p style='font-size: 0.95rem; font-weight: 500; margin-bottom: 4px;'>Marcadores de riesgo detectados:</p>", unsafe_allow_html=True)
+                    st.write("")
+                    st.markdown("<p style='font-size: 0.95rem; font-weight: 600; margin-bottom: 8px;'>Marcadores de riesgo detectados:</p>", unsafe_allow_html=True)
                     for alerta in alertas:
                         st.markdown(f"• {alerta}")
 
 with tab2:
+    st.write("")
     st.markdown("### 📊 Calibración del Modelo (Ajuste Epidemiológico Local)")
     st.markdown("Carga la base de datos anonimizada del hospital (formato `.xlsx` o `.csv`) que contenga los históricos de pacientes confirmados y controles para realizar el ajuste multivariante de la constante matemática del algoritmo.")
     
@@ -244,5 +265,6 @@ with tab2:
     
     if archivo_subido is not None:
         st.success("Muestra de datos estructurada cargada en memoria con éxito.")
+        st.write("")
         if st.button("🚀 Iniciar Calibración Multivariante y Ajuste ROC"):
             st.info("Módulo bioinformático en desarrollo.")
