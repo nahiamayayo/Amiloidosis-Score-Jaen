@@ -187,7 +187,7 @@ with tab1:
 
     # Acordeón integrado para revisión manual (con más aire entre columnas)
     st.write("")
-    with st.expander("🛠️ Ver y verificar valores bioquímicos extraídos", expanded=(pdf_subido is None)):
+    with st.expander("Ver y verificar valores bioquímicos extraídos", expanded=(pdf_subido is None)):
         st.markdown("<p style='color: #4a5568; font-size: 0.95rem; margin-bottom: 15px;'>Modifica o introduce valores si el parámetro no constaba en el PDF original:</p>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns(3, gap="large") # gap="large" da mucho más espacio horizontal
         with col1:
@@ -271,5 +271,5 @@ with tab2:
     if archivo_subido is not None:
         st.success("Muestra de datos estructurada cargada en memoria con éxito.")
         st.write("")
-        if st.button("🚀 Iniciar Calibración Multivariante y Ajuste ROC"):
+        if st.button("Iniciar Calibración Multivariante y Ajuste ROC"):
             st.info("Módulo bioinformático en desarrollo.")
