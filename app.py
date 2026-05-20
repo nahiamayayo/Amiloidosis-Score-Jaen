@@ -138,8 +138,8 @@ with tab1:
     st.markdown("### Carga de Datos Clínicos")
     st.markdown("Sube la analítica de rutina anonimizada del paciente en formato PDF. El sistema analizará el documento de manera automatizada.")
     
-    pdf_subido = st.file_uploader("", type=["pdf"], label_visibility="collapsed")
-    
+pdf_subido = st.file_uploader("Subir analítica médica", type=["pdf"], label_visibility="collapsed")
+
     valores_extraidos = {
         'Glucosa': None, 'Trigliceridos': None, 'Colesterol': None,
         'Colinesterasa': None, 'Gamma_GT': None, 'Albumina': None,
