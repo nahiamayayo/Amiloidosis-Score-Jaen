@@ -174,120 +174,51 @@ with tab1:
                         st.markdown(f"• {alerta}")
 
 with tab2:
-    st.write("")
-    st.markdown("### 🧠 Creación de Score Local (Regresión Logística)")
-    st.markdown("Entrena un nuevo modelo matemático usando tu base de datos para generar coeficientes específicos para la unidad.")
+    st.markdown("### 🧠 Entrenamiento del 'Score CardioGen Jaén'")
+    st.markdown("Este módulo entrena un modelo de Regresión Logística basado exclusivamente en vuestra cohorte local.")
     
-    archivo_csv = st.file_uploader("Seleccionar base de datos clínica (.xlsx / .csv)", type=["xlsx", "csv"])
+    archivo_csv = st.file_uploader("Cargar Base de Datos (.csv / .xlsx)", type=["csv", "xlsx"])
     
-    def limpiar_valor_para_entrenamiento(val):
-        if pd.isna(val): return np.nan
-        val_str = str(val).strip().upper().replace(',', '.')
-        if val_str in ['NP', 'MHC', 'MNR', '-', 'MAR', '']: return np.nan
-        if '<' in val_str or '>' in val_str: return float(re.sub(r'[<>]', '', val_str).strip())
-        try: return float(val_str)
-        except: return np.nan
-
-    if archivo_csv is not None:
-        try:
-            if archivo_csv.name.endswith('.csv'): df = pd.read_csv(archivo_csv)
-            else: df = pd.read_excel(archivo_csv)
-                
-            st.success(f"✅ Base de datos cargada: {len(df)} pacientes listos para entrenamiento.")
-            st.write("")
+    if archivo_csv:
+        df = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
+        
+        # 1. Identificar las columnas existentes (ignorando las que no tenéis)
+        # Usamos los nombres reales que aparecen en tu archivo (sin erratas)
+        columnas_candidatas = ['Glucosa', 'Triglicéridos', 'Colesterol', 'Gamma-GT', 'Albúmina', 'MCH', 'Magnesio', 'Hemoglobina', 'PCR', 'proBNP']
+        
+        if st.button("Entrenar Score CardioGen Jaén", use_container_width=True):
+            # Limpieza y selección
+            X = df[columnas_candidatas].applymap(limpiar_valor_para_entrenamiento)
+            y = df['Diagnóstico final']
             
-            if st.button("🚀 Entrenar Score Local y Calcular Rendimiento", use_container_width=True):
-                # 1. Mapeo adaptado a las columnas que existen en tu Excel
-                mapa_columnas = {
-                    'Glucosa': 'Glucosa', 'Gluosa': 'Glucosa', 
-                    'Triglicéridos': 'Trigliceridos', 'Trigliéridos': 'Trigliceridos', 
-                    'Colesterol': 'Colesterol', 'olesterol': 'Colesterol',
-                    'Gamma-GT': 'Gamma_GT', 
-                    'Albúmina': 'Albumina', 
-                    'MCH': 'MCH', 'MH': 'MCH', 'MHC': 'MCH',
-                    'Magnesio': 'Magnesio', 
-                    'Hemoglobina': 'Hb_libre', 
-                    'PCR': 'PCR', 'PR': 'PCR'
-                }
-                
-                parametros_en_excel = list(set(mapa_columnas.values()))
-                
-                # 2. Extracción y limpieza estructurada para el algoritmo
-                datos_limpios = []
-                col_diagnostico = 'Diagnóstio final' if 'Diagnóstio final' in df.columns else 'Diagnóstico final'
-                
-                for index, row in df.iterrows():
-                    fila_dict = {}
-                    for col_excel in df.columns:
-                        if col_excel in mapa_columnas:
-                            col_motor = mapa_columnas[col_excel]
-                            fila_dict[col_motor] = limpiar_valor_para_entrenamiento(row[col_excel])
-                    fila_dict['Diagnostico'] = int(row[col_diagnostico])
-                    datos_limpios.append(fila_dict)
-                
-                df_limpio = pd.DataFrame(datos_limpios)
-                
-                # 3. Preparación de datos (Machine Learning Pipeline)
-                X = df_limpio.drop('Diagnostico', axis=1)
-                y = df_limpio['Diagnostico']
-                
-                # Imputación: Rellenamos valores vacíos (NP) con la mediana de NUESTRA propia muestra
-                imputer = SimpleImputer(strategy='median')
-                X_imputed = imputer.fit_transform(X)
-                
-                # 4. Entrenamiento del Modelo (Regresión Logística como en el estudio)
-                clf = LogisticRegression(max_iter=2000, class_weight='balanced')
-                clf.fit(X_imputed, y)
-                
-                # 5. Generación del "Score Local"
-                predicciones_prob = clf.predict_proba(X_imputed)[:, 1]
-                coeficientes = clf.coef_[0]
-                intercepto = clf.intercept_[0]
-                
-                st.markdown("---")
-                st.markdown("### 🧬 El Nuevo Score CardioGen")
-                st.markdown("El modelo ha calculado sus propios pesos basados en los patrones de los pacientes andaluces.")
-                
-                # Mostrar la ecuación matemática
-                ecuacion = f"**Score** = {intercepto:.4f} "
-                for i, col in enumerate(X.columns):
-                    signo = "+" if coeficientes[i] >= 0 else "-"
-                    ecuacion += f"{signo} ({abs(coeficientes[i]):.4f} × {col}) "
-                
-                st.info(ecuacion)
-                
-                # 6. Evaluación de Curva ROC
-                if len(set(y)) > 1:
-                    fpr, tpr, thresholds = roc_curve(y, predicciones_prob)
-                    roc_auc = auc(fpr, tpr)
-                    
-                    youden_index = tpr - fpr
-                    best_threshold_idx = youden_index.argmax()
-                    best_threshold = thresholds[best_threshold_idx]
-                    sensibilidad = tpr[best_threshold_idx]
-                    especificidad = 1 - fpr[best_threshold_idx]
-                    
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Variables Entrenadas", len(X.columns))
-                    c2.metric("Área bajo la curva (AUC)", f"{roc_auc:.3f}")
-                    c3.metric("Sensibilidad Máxima", f"{sensibilidad*100:.1f}%")
-                    
-                    # Gráfica ROC
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    ax.plot(fpr, tpr, color='#0b5a32', lw=2, label=f'Score Local (AUC = {roc_auc:.3f})')
-                    ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
-                    ax.scatter(fpr[best_threshold_idx], tpr[best_threshold_idx], color='red', s=100, label=f'Punto Óptimo: Prob > {best_threshold:.2f}', zorder=5)
-                    ax.set_xlim([0.0, 1.0])
-                    ax.set_ylim([0.0, 1.05])
-                    ax.set_xlabel('1 - Especificidad (Falsos Positivos)')
-                    ax.set_ylabel('Sensibilidad (Verdaderos Positivos)')
-                    ax.set_title('Rendimiento del Nuevo Score Entrenado con Datos de Jaén')
-                    ax.legend(loc="lower right")
-                    ax.grid(alpha=0.3)
-                    
-                    st.pyplot(fig)
-                else:
-                    st.warning("⚠️ No se puede calcular la curva ROC (faltan controles o casos confirmados en la muestra).")
-                    
-        except Exception as e:
-            st.error(f"Error procesando la base de datos para el entrenamiento: {e}")
+            # 2. Imputación con vuestras propias medianas
+            imputer = SimpleImputer(strategy='median')
+            X_imputed = imputer.fit_transform(X)
+            
+            # 3. Entrenamiento
+            clf = LogisticRegression(max_iter=2000, class_weight='balanced')
+            clf.fit(X_imputed, y)
+            
+            # 4. Resultados para los cardiólogos
+            st.success("✅ Modelo entrenado con éxito.")
+            
+            # Mostrar la ecuación matemática generada
+            st.markdown("### 🧬 Ecuación del Score CardioGen")
+            coefs = clf.coef_[0]
+            intercept = clf.intercept_[0]
+            
+            formula = f"**Probabilidad** = 1 / (1 + e^(-({intercept:.4f} "
+            for i, col in enumerate(columnas_candidatas):
+                formula += f"+ ({coefs[i]:.4f} * {col}) "
+            formula += ")))"
+            st.info(formula)
+            
+            # 5. Visualización del rendimiento
+            pred_prob = clf.predict_proba(X_imputed)[:, 1]
+            fpr, tpr, _ = roc_curve(y, pred_prob)
+            
+            fig, ax = plt.subplots()
+            ax.plot(fpr, tpr, color='#0b5a32', lw=2)
+            ax.plot([0, 1], [0, 1], 'k--')
+            ax.set_title(f"Rendimiento del Score Jaén (AUC: {auc(fpr, tpr):.3f})")
+            st.pyplot(fig)
