@@ -118,9 +118,9 @@ with tab2:
         
         # Diccionario para traducir cualquier variación encontrada en tu Excel
         traductor = {
-            'Gluosa': 'Glucosa', 'Glucosa': 'Glucosa',
-            'Trigliéridos': 'Trigliceridos', 'Triglicéridos': 'Trigliceridos',
-            'olesterol': 'Colesterol', 'Colesterol': 'Colesterol',
+            'Glucosa': 'Glucosa', 'Gluosa': 'Glucosa', 
+            'Triglicéridos': 'Trigliceridos', 'Trigliéridos': 'Trigliceridos',
+            'Colesterol': 'Colesterol', 'olesterol': 'Colesterol',
             'Gamma-GT': 'Gamma_GT', 'Albúmina': 'Albumina',
             'MH': 'MCH', 'MHC': 'MCH', 'MCH': 'MCH',
             'Magnesio': 'Magnesio', 'Hemoglobina': 'Hb_libre',
@@ -129,16 +129,14 @@ with tab2:
             'Diagnóstio final': 'Diagnóstico final'
         }
         
-        # Renombramos las columnas del DataFrame con nuestro diccionario
+        # Renombramos las columnas
         df_limpio = df.rename(columns=traductor)
-        
-        # Seleccionamos solo las que necesitamos para el entrenamiento
         columnas_finales = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Gamma_GT', 'Albumina', 'MCH', 'Magnesio', 'Hb_libre', 'PCR', 'proBNP']
         
         if st.button("🚀 Entrenar y Analizar Rendimiento"):
             try:
-                # Filtrar solo las columnas necesarias y limpiar
-                X = df_limpio[columnas_finales].applymap(limpiar_valor_para_entrenamiento)
+                # AQUÍ ESTÁ EL CAMBIO: .map() en lugar de .applymap()
+                X = df_limpio[columnas_finales].map(limpiar_valor_para_entrenamiento)
                 y = df_limpio['Diagnóstico final']
                 
                 # Entrenamiento
@@ -154,8 +152,8 @@ with tab2:
                 # 2. Importancia
                 st.markdown("### 🧬 Importancia de Variables")
                 importancias = pd.DataFrame({'Variable': columnas_finales, 'Peso': np.abs(clf.coef_[0])}).sort_values('Peso', ascending=False)
-                fig, ax = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax, color='#0b5a32')
-                st.pyplot(fig)
+                fig_bar, ax_bar = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax_bar, color='#0b5a32')
+                st.pyplot(fig_bar)
                 
                 # 3. Calibración
                 st.markdown("### ⚖️ Calibración")
@@ -166,4 +164,4 @@ with tab2:
                 st.pyplot(fig_cal)
                 
             except KeyError as e:
-                st.error(f"Error: No se encuentran todas las columnas necesarias. Revisa que el Excel contenga: {columnas_finales}. Error detallado: {e}")
+                st.error(f"Error: Asegúrate de que las columnas en el Excel coincidan. Columnas detectadas: {df_limpio.columns.tolist()}. Error: {e}")
