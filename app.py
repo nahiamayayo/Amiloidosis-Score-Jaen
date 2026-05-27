@@ -13,7 +13,7 @@ from sklearn.model_selection import cross_val_score
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
 # Configuración de la página
-st.set_page_config(
+st.set_config = st.set_page_config(
     page_title="Amiloidosis-Score-Jaén", 
     page_icon="🫀", 
     layout="wide",  
@@ -29,7 +29,7 @@ def limpiar_valor_para_entrenamiento(val):
     try: return float(val_str)
     except: return np.nan
 
-# --- CSS (Mantenido intacto) ---
+# --- CSS ---
 st.markdown("""
 <style>
     .stApp { background-color: #f7faf8; }
@@ -49,7 +49,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- CABECERA (Mantenida intacta) ---
+# --- CABECERA ---
 header_col1, header_col2 = st.columns([1.2, 6], vertical_alignment="center")
 with header_col1:
     if os.path.exists("huj.png"): st.image("huj.png", use_container_width=True) 
@@ -60,18 +60,39 @@ with header_col2:
 
 tab1, tab2 = st.tabs(["📋 Evaluación de Paciente Individual", "🧠 Entrenamiento de Modelo Local"])
 
-# --- PESTAÑA 1 (Mantenida intacta) ---
+# --- PESTAÑA 1 ---
 with tab1:
     st.markdown("### Carga de Datos Clínicos")
     pdf_subido = st.file_uploader("Subir analítica médica", type=["pdf"], label_visibility="collapsed")
     
-    # Parámetros actualizados según vuestro Excel (incluyendo proBNP)
+    # 10 parámetros definidos
     parametros_jaen = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Gamma_GT', 'Albumina', 'MCH', 'Magnesio', 'Hb_libre', 'PCR', 'proBNP']
     valores_extraidos = {k: 0.0 for k in parametros_jaen}
     
-    if pdf_subido:
-        # ... (Mantén aquí tu lógica de extracción que ya tenías) ...
-        pass
+    if pdf_subido is not None:
+        try:
+            texto_completo = ""
+            with pdfplumber.open(pdf_subido) as pdf:
+                for pagina in pdf.pages:
+                    texto = pagina.extract_text(layout=True)
+                    if texto: texto_completo += texto + "\n"
+            
+            patrones_nombres = {
+                'Glucosa': r'Glucosa', 'Trigliceridos': r'Triglic[eé]ridos|Triglic', 'Colesterol': r'Colesterol',
+                'Gamma_GT': r'Gamma\s*glutamiltransferasa|Gamma[\s-]*GT|G\.G\.T',
+                'Albumina': r'Alb[uú]mina', 'MCH': r'MCH|MHC|HCM',
+                'Magnesio': r'Magnesio', 'Hb_libre': r'Hemoglobina(?!\s*glicosilada|\s*corpuscular)',
+                'PCR': r'Prote[ií]na\s*C\s*reactiva|PCR', 'proBNP': r'proBNP|NT-proBNP'
+            }
+
+            for clave, patron in patrones_nombres.items():
+                regex = rf"(?:{patron})[^\dA-Za-z]*(\d+[.,]\d+|\d+)"
+                match = re.search(regex, texto_completo, re.IGNORECASE)
+                if match: valores_extraidos[clave] = float(match.group(1).replace(',', '.'))
+            
+            st.success("✅ Extracción digital completada.")
+        except Exception as e:
+            st.error(f"Error procesando PDF: {e}")
 
     with st.expander("Ver y verificar valores bioquímicos", expanded=True):
         cols = st.columns(2)
@@ -82,13 +103,15 @@ with tab1:
         resultado = procesar_analitica_paciente(valores_extraidos)
         st.success(resultado['mensaje'])
 
-# --- PESTAÑA 2 (Actualizada con las 3 funciones de IA) ---
+# --- PESTAÑA 2 ---
 with tab2:
     st.markdown("### 🧠 Entrenamiento del 'Score CardioGen Jaén'")
     archivo_csv = st.file_uploader("Cargar Base de Datos (.xlsx / .csv)", type=["xlsx", "csv"])
     
     if archivo_csv:
         df = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
+        
+        # Mapeo actualizado a los nombres reales de tu excel limpio
         mapa = {
             'Glucosa': 'Glucosa', 'Triglicéridos': 'Trigliceridos', 'Colesterol': 'Colesterol',
             'Gamma-GT': 'Gamma_GT', 'Albúmina': 'Albumina', 'MHC': 'MCH', 
@@ -110,8 +133,8 @@ with tab2:
             # 2. Importancia
             st.markdown("### 🧬 Importancia de Variables")
             importancias = pd.DataFrame({'Variable': list(mapa.keys()), 'Peso': np.abs(clf.coef_[0])}).sort_values('Peso', ascending=False)
-            fig, ax = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax, color='#0b5a32')
-            st.pyplot(fig)
+            fig_bar, ax_bar = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax_bar, color='#0b5a32')
+            st.pyplot(fig_bar)
             
             # 3. Calibración
             st.markdown("### ⚖️ Calibración")
