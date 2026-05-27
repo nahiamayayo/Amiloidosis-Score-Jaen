@@ -116,35 +116,54 @@ with tab2:
     if archivo_csv:
         df = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
         
-        # Mapeo actualizado a los nombres reales de tu excel limpio
-        mapa = {
-            'Glucosa': 'Glucosa', 'Triglicéridos': 'Trigliceridos', 'Colesterol': 'Colesterol',
-            'Gamma-GT': 'Gamma_GT', 'Albúmina': 'Albumina', 'MHC': 'MCH', 
-            'Magnesio': 'Magnesio', 'Hemoglobina': 'Hb_libre', 'PCR': 'PCR', 'proBNP': 'proBNP'
+        # Diccionario para traducir cualquier variación encontrada en tu Excel
+        traductor = {
+            'Gluosa': 'Glucosa', 'Glucosa': 'Glucosa',
+            'Trigliéridos': 'Trigliceridos', 'Triglicéridos': 'Trigliceridos',
+            'olesterol': 'Colesterol', 'Colesterol': 'Colesterol',
+            'Gamma-GT': 'Gamma_GT', 'Albúmina': 'Albumina',
+            'MH': 'MCH', 'MHC': 'MCH', 'MCH': 'MCH',
+            'Magnesio': 'Magnesio', 'Hemoglobina': 'Hb_libre',
+            'PR': 'PCR', 'PCR': 'PCR',
+            'proB': 'proBNP', 'proBNP': 'proBNP',
+            'Diagnóstio final': 'Diagnóstico final'
         }
         
+        # Renombramos las columnas del DataFrame con nuestro diccionario
+        df_limpio = df.rename(columns=traductor)
+        
+        # Seleccionamos solo las que necesitamos para el entrenamiento
+        columnas_finales = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Gamma_GT', 'Albumina', 'MCH', 'Magnesio', 'Hb_libre', 'PCR', 'proBNP']
+        
         if st.button("🚀 Entrenar y Analizar Rendimiento"):
-            X = df[list(mapa.keys())].applymap(limpiar_valor_para_entrenamiento)
-            y = df['Diagnóstico final']
-            
-            clf = LogisticRegression(max_iter=2000, class_weight='balanced')
-            X_imputed = SimpleImputer(strategy='median').fit_transform(X)
-            clf.fit(X_imputed, y)
-            
-            # 1. Estabilidad
-            scores_cv = cross_val_score(clf, X_imputed, y, cv=5)
-            st.metric("Estabilidad (Cross-Validation)", f"{scores_cv.mean():.2%}")
-            
-            # 2. Importancia
-            st.markdown("### 🧬 Importancia de Variables")
-            importancias = pd.DataFrame({'Variable': list(mapa.keys()), 'Peso': np.abs(clf.coef_[0])}).sort_values('Peso', ascending=False)
-            fig_bar, ax_bar = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax_bar, color='#0b5a32')
-            st.pyplot(fig_bar)
-            
-            # 3. Calibración
-            st.markdown("### ⚖️ Calibración")
-            prob_pred = clf.predict_proba(X_imputed)[:, 1]
-            prob_true, prob_pred_cal = calibration_curve(y, prob_pred, n_bins=5)
-            fig_cal, ax_cal = plt.subplots(); ax_cal.plot(prob_pred_cal, prob_true, marker='o', color='#0b5a32')
-            ax_cal.plot([0, 1], [0, 1], linestyle='--', color='gray')
-            st.pyplot(fig_cal)
+            try:
+                # Filtrar solo las columnas necesarias y limpiar
+                X = df_limpio[columnas_finales].applymap(limpiar_valor_para_entrenamiento)
+                y = df_limpio['Diagnóstico final']
+                
+                # Entrenamiento
+                clf = LogisticRegression(max_iter=2000, class_weight='balanced')
+                X_imputed = SimpleImputer(strategy='median').fit_transform(X)
+                clf.fit(X_imputed, y)
+                
+                st.markdown("---")
+                # 1. Estabilidad
+                scores_cv = cross_val_score(clf, X_imputed, y, cv=5)
+                st.metric("Estabilidad (Cross-Validation)", f"{scores_cv.mean():.2%}")
+                
+                # 2. Importancia
+                st.markdown("### 🧬 Importancia de Variables")
+                importancias = pd.DataFrame({'Variable': columnas_finales, 'Peso': np.abs(clf.coef_[0])}).sort_values('Peso', ascending=False)
+                fig, ax = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax, color='#0b5a32')
+                st.pyplot(fig)
+                
+                # 3. Calibración
+                st.markdown("### ⚖️ Calibración")
+                prob_pred = clf.predict_proba(X_imputed)[:, 1]
+                prob_true, prob_pred_cal = calibration_curve(y, prob_pred, n_bins=5)
+                fig_cal, ax_cal = plt.subplots(); ax_cal.plot(prob_pred_cal, prob_true, marker='o', color='#0b5a32')
+                ax_cal.plot([0, 1], [0, 1], linestyle='--', color='gray')
+                st.pyplot(fig_cal)
+                
+            except KeyError as e:
+                st.error(f"Error: No se encuentran todas las columnas necesarias. Revisa que el Excel contenga: {columnas_finales}. Error detallado: {e}")
