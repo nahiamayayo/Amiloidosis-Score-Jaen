@@ -94,36 +94,66 @@ with tab1:
     if st.button("🧬 Computar Análisis"):
         st.info("Algoritmo de cálculo preparado.")
 
-# --- PESTAÑA 2: ENTRENAMIENTO ---
+# --- PESTAÑA 2: ENTRENAMIENTO Y VALIDACIÓN CLÍNICA ---
 with tab2:
     st.markdown("### 🧠 Entrenamiento del 'Score CardioGen Jaén'")
+    st.info("Nota: Este modelo normaliza los datos (StandardScaler) para una comparación justa entre biomarcadores.")
+    
     archivo_csv = st.file_uploader("Cargar Base de Datos (.xlsx / .csv)", type=["xlsx", "csv"])
     
     if archivo_csv:
         df = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
         
-        # Traductor robusto
+        # Diccionario de traducción robusto
         traductor = {
-            'Gluosa': 'Glucosa', 'Glucosa': 'Glucosa', 'Trigliéridos': 'Trigliceridos', 'Triglicéridos': 'Trigliceridos',
-            'olesterol': 'Colesterol', 'Colesterol': 'Colesterol', 'Gamma-GT': 'Gamma_GT', 'Albúmina': 'Albumina',
-            'MH': 'MCH', 'MHC': 'MCH', 'MCH': 'MCH', 'Magnesio': 'Magnesio', 'Hemoglobina': 'Hb_libre',
-            'PR': 'PCR', 'PCR': 'PCR', 'proB': 'proBNP', 'proBNP': 'proBNP'
+            'Glucosa': 'Glucosa', 'Gluosa': 'Glucosa', 
+            'Triglicéridos': 'Trigliceridos', 'Trigliéridos': 'Trigliceridos',
+            'Colesterol': 'Colesterol', 'olesterol': 'Colesterol',
+            'Gamma-GT': 'Gamma_GT', 'Albúmina': 'Albumina',
+            'MH': 'MCH', 'MHC': 'MCH', 'MCH': 'MCH',
+            'Magnesio': 'Magnesio', 'Hemoglobina': 'Hb_libre',
+            'PR': 'PCR', 'PCR': 'PCR',
+            'proB': 'proBNP', 'proBNP': 'proBNP',
+            'Diagnóstio final': 'Diagnóstico final'
         }
         df_limpio = df.rename(columns=traductor)
         columnas_finales = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Gamma_GT', 'Albumina', 'MCH', 'Magnesio', 'Hb_libre', 'PCR', 'proBNP']
         
-        if st.button("🚀 Entrenar y Analizar"):
-            # AQUÍ ESTÁ LA CORRECCIÓN: usamos .apply(lambda...) para ser compatibles con cualquier versión de pandas
-            X = df_limpio[columnas_finales].apply(lambda col: col.map(limpiar_valor_para_entrenamiento))
-            y = df_limpio['Diagnóstico final']
-            
-            clf = LogisticRegression(max_iter=2000, class_weight='balanced')
-            X_imputed = SimpleImputer(strategy='median').fit_transform(X)
-            clf.fit(X_imputed, y)
-            
-            st.metric("Estabilidad (Cross-Validation)", f"{cross_val_score(clf, X_imputed, y, cv=5).mean():.2%}")
-            
-            # Importancia de variables
-            importancias = pd.DataFrame({'Variable': columnas_finales, 'Peso': np.abs(clf.coef_[0])}).sort_values('Peso', ascending=False)
-            fig, ax = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax, color='#0b5a32')
-            st.pyplot(fig)
+        if st.button("🚀 Entrenar Score Clínico Local"):
+            try:
+                # 1. Limpieza y escalado
+                X = df_limpio[columnas_finales].apply(lambda col: col.map(limpiar_valor_para_entrenamiento))
+                y = df_limpio['Diagnóstico final']
+                
+                # 2. Pipeline de pre-procesamiento profesional
+                imputer = SimpleImputer(strategy='median')
+                scaler = StandardScaler() # <--- CLAVE PARA LA COHERENCIA CLÍNICA
+                
+                X_imputed = imputer.fit_transform(X)
+                X_scaled = scaler.fit_transform(X_imputed)
+                
+                # 3. Entrenamiento
+                clf = LogisticRegression(max_iter=2000, class_weight='balanced')
+                clf.fit(X_scaled, y)
+                
+                # 4. Resultados
+                st.markdown("---")
+                scores_cv = cross_val_score(clf, X_scaled, y, cv=5)
+                st.metric("Fiabilidad del Score (Validación Cruzada)", f"{scores_cv.mean():.2%}")
+                
+                # Gráfico de Importancia Corregido
+                st.markdown("### 🧬 Importancia Clínica de Variables")
+                importancias = pd.DataFrame({'Variable': columnas_finales, 'Peso': np.abs(clf.coef_[0])}).sort_values('Peso', ascending=False)
+                fig, ax = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax, color='#0b5a32')
+                st.pyplot(fig)
+                
+                # Gráfico de Calibración
+                st.markdown("### ⚖️ Calibración del Modelo")
+                prob_pred = clf.predict_proba(X_scaled)[:, 1]
+                prob_true, prob_pred_cal = calibration_curve(y, prob_pred, n_bins=5)
+                fig_cal, ax_cal = plt.subplots(); ax_cal.plot(prob_pred_cal, prob_true, marker='o', color='#0b5a32')
+                ax_cal.plot([0, 1], [0, 1], linestyle='--', color='gray')
+                st.pyplot(fig_cal)
+                
+            except Exception as e:
+                st.error(f"Error en el entrenamiento clínico: {e}")
