@@ -173,52 +173,57 @@ with tab1:
                     for alerta in alertas:
                         st.markdown(f"• {alerta}")
 
+from sklearn.model_selection import cross_val_score
+from sklearn.calibration import calibration_curve
+
+# --- PESTAÑA 2: ENTRENAMIENTO DE MODELO Y VALIDACIÓN ---
 with tab2:
     st.markdown("### 🧠 Entrenamiento del 'Score CardioGen Jaén'")
-    st.markdown("Este módulo entrena un modelo de Regresión Logística basado exclusivamente en vuestra cohorte local.")
-    
-    archivo_csv = st.file_uploader("Cargar Base de Datos (.csv / .xlsx)", type=["csv", "xlsx"])
+    archivo_csv = st.file_uploader("Cargar Base de Datos (.xlsx / .csv)", type=["xlsx", "csv"])
     
     if archivo_csv:
         df = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
         
-        # 1. Identificar las columnas existentes (ignorando las que no tenéis)
-        # Usamos los nombres reales que aparecen en tu archivo (sin erratas)
-        columnas_candidatas = ['Glucosa', 'Triglicéridos', 'Colesterol', 'Gamma-GT', 'Albúmina', 'MCH', 'Magnesio', 'Hemoglobina', 'PCR', 'proBNP']
+        # Mapeo de columnas (usando los nombres finales de tu archivo limpio)
+        mapa = {
+            'Glucosa': 'Glucosa', 'Triglicéridos': 'Trigliceridos', 'Colesterol': 'Colesterol',
+            'Gamma-GT': 'Gamma_GT', 'Albúmina': 'Albumina', 'MHC': 'MCH', 
+            'Magnesio': 'Magnesio', 'Hemoglobina': 'Hb_libre', 'PCR': 'PCR', 'proBNP': 'proBNP'
+        }
         
-        if st.button("Entrenar Score CardioGen Jaén", use_container_width=True):
-            # Limpieza y selección
-            X = df[columnas_candidatas].applymap(limpiar_valor_para_entrenamiento)
+        if st.button("🚀 Entrenar y Analizar Rendimiento Clínico"):
+            X = df[list(mapa.keys())].applymap(limpiar_valor_para_entrenamiento)
             y = df['Diagnóstico final']
             
-            # 2. Imputación con vuestras propias medianas
-            imputer = SimpleImputer(strategy='median')
-            X_imputed = imputer.fit_transform(X)
-            
-            # 3. Entrenamiento
+            # Entrenamiento y Validación
             clf = LogisticRegression(max_iter=2000, class_weight='balanced')
+            X_imputed = SimpleImputer(strategy='median').fit_transform(X)
             clf.fit(X_imputed, y)
             
-            # 4. Resultados para los cardiólogos
-            st.success("✅ Modelo entrenado con éxito.")
+            st.markdown("---")
             
-            # Mostrar la ecuación matemática generada
-            st.markdown("### 🧬 Ecuación del Score CardioGen")
-            coefs = clf.coef_[0]
-            intercept = clf.intercept_[0]
+            # 1. ESTABILIDAD (Cross-Validation)
+            scores_cv = cross_val_score(clf, X_imputed, y, cv=5)
+            st.metric("Estabilidad del Modelo (Cross-Validation 5-fold)", f"{scores_cv.mean():.2%}")
             
-            formula = f"**Probabilidad** = 1 / (1 + e^(-({intercept:.4f} "
-            for i, col in enumerate(columnas_candidatas):
-                formula += f"+ ({coefs[i]:.4f} * {col}) "
-            formula += ")))"
-            st.info(formula)
+            # 2. COMPARATIVA (Feature Importance)
+            st.markdown("### 🧬 Importancia de Variables (Impacto Clínico)")
+            importancias = pd.DataFrame({'Variable': list(mapa.keys()), 'Peso': np.abs(clf.coef_[0])}).sort_values('Peso', ascending=False)
+            fig_bar, ax_bar = plt.subplots()
+            importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax_bar, color='#0b5a32')
+            st.pyplot(fig_bar)
+            st.caption("Gráfico: Cuánto aporta cada parámetro (incluido el proBNP) al diagnóstico final.")
             
-            # 5. Visualización del rendimiento
-            pred_prob = clf.predict_proba(X_imputed)[:, 1]
-            fpr, tpr, _ = roc_curve(y, pred_prob)
+            # 3. CALIBRACIÓN
+            st.markdown("### ⚖️ Calibración Probabilística")
+            prob_pred = clf.predict_proba(X_imputed)[:, 1]
+            prob_true, prob_pred_cal = calibration_curve(y, prob_pred, n_bins=5)
             
-            fig, ax = plt.subplots()
-            ax.plot(fpr, tpr, color='#0b5a32', lw=2)
-            ax.plot([0, 1], [0, 1], 'k--')
-            ax.set_title(f"Rendimiento del Score Jaén (AUC: {auc(fpr, tpr):.3f})")
-            st.pyplot(fig)
+            fig_cal, ax_cal = plt.subplots()
+            ax_cal.plot(prob_pred_cal, prob_true, marker='o', color='#0b5a32', label='Modelo Jaén')
+            ax_cal.plot([0, 1], [0, 1], linestyle='--', color='gray')
+            ax_cal.set_xlabel('Probabilidad predicha')
+            ax_cal.set_ylabel('Fracción de casos reales')
+            st.pyplot(fig_cal)
+            
+            st.info("La proximidad de la línea verde a la diagonal indica que vuestro modelo es excelente calibrando el riesgo real del paciente.")
