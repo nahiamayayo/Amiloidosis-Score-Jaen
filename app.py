@@ -5,7 +5,8 @@ import re
 import pdfplumber
 import os
 import matplotlib.pyplot as plt
-from sklearn.metrics import roc_curve, auc, calibration_curve
+from sklearn.metrics import roc_curve, auc
+from sklearn.calibration import calibration_curve
 from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import cross_val_score
