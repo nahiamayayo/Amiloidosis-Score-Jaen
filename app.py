@@ -1,13 +1,16 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import re
 import pdfplumber
 import os
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
+from sklearn.linear_model import LogisticRegression
+from sklearn.impute import SimpleImputer
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
-# Configuración de la página: Cambiamos a 'wide' para que no se vea tan condensado
+# Configuración de la página
 st.set_page_config(
     page_title="Amiloidosis-Score-Jaén", 
     page_icon="🫀", 
@@ -18,106 +21,24 @@ st.set_page_config(
 # --- CONFIGURACIÓN DE ESTILO CLÍNICO AVANZADO (CSS) ---
 st.markdown("""
 <style>
-    /* Fondo general de la aplicación */
-    .stApp {
-        background-color: #f7faf8;
-    }
-    
-    /* Controlar el ancho máximo para que sea amplio pero no infinito */
-    .block-container {
-        max-width: 1100px !important;
-        padding-top: 2rem !important;
-    }
-    
-    /* EVITAR RECORTE Y CONTROLAR ALTURA DEL LOGO (ACTUALIZADO) */
-    div[data-testid="stImage"] {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        overflow: visible !important;
-    }
-    div[data-testid="stImage"] img {
-        border-radius: 0px !important;
-        object-fit: contain !important;
-        box-shadow: none !important;
-        max-height: 85px !important;
-        width: auto !important;
-    }
-    
-    /* Personalización de los botones principales */
-    .stButton>button {
-        background-color: #0b5a32 !important;
-        color: white !important;
-        border-radius: 8px !important;
-        border: none !important;
-        padding: 10px 24px !important;
-        font-weight: 600 !important;
-        box-shadow: 0px 4px 6px rgba(11, 90, 50, 0.15) !important;
-        transition: all 0.3s ease !important;
-    }
-    .stButton>button:hover {
-        background-color: #084424 !important;
-        transform: translateY(-1px) !important;
-        box-shadow: 0px 6px 12px rgba(11, 90, 50, 0.25) !important;
-    }
-    
-    /* --- DISEÑO DE PESTAÑAS (Eliminando la línea roja) --- */
-    div[data-baseweb="tab-highlight"] {
-        display: none !important;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-        border-bottom: 2px solid #e2e8f0;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: transparent;
-        border: none;
-        border-bottom: 3px solid transparent;
-        padding: 10px 20px;
-        font-weight: 500;
-        color: #718096;
-    }
-    .stTabs [aria-selected="true"] {
-        color: #0b5a32 !important;
-        border-bottom: 3px solid #0b5a32 !important;
-        background-color: transparent !important;
-        font-weight: 700 !important;
-    }
-
-    /* Tarjeta flotante para el Score Médico */
-    div[data-testid="metric-container"] {
-        background-color: #ffffff;
-        border: 2px solid #e2e8f0;
-        border-left: 6px solid #0b5a32;
-        padding: 24px;
-        border-radius: 12px;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.03);
-    }
-    
-    /* Tipografías institucionales */
-    h1 {
-        color: #0b5a32 !important;
-        font-family: 'Segoe UI', system-ui, sans-serif;
-        font-weight: 700 !important;
-        margin-bottom: 4px !important;
-    }
-    h2, h3, h4 {
-        color: #2d3748 !important;
-        font-family: 'Segoe UI', system-ui, sans-serif;
-        font-weight: 600 !important;
-    }
-    
-    /* Estilización del área de arrastre del archivo PDF */
-    div[data-testid="stFileUploader"] {
-        background-color: #ffffff;
-        border: 2px dashed #cbd5e1;
-        border-radius: 12px;
-        padding: 20px;
-    }
+    .stApp { background-color: #f7faf8; }
+    .block-container { max-width: 1100px !important; padding-top: 2rem !important; }
+    div[data-testid="stImage"] { display: flex; align-items: center; justify-content: center; overflow: visible !important; }
+    div[data-testid="stImage"] img { border-radius: 0px !important; object-fit: contain !important; box-shadow: none !important; max-height: 85px !important; width: auto !important; }
+    .stButton>button { background-color: #0b5a32 !important; color: white !important; border-radius: 8px !important; border: none !important; padding: 10px 24px !important; font-weight: 600 !important; box-shadow: 0px 4px 6px rgba(11, 90, 50, 0.15) !important; transition: all 0.3s ease !important; }
+    .stButton>button:hover { background-color: #084424 !important; transform: translateY(-1px) !important; box-shadow: 0px 6px 12px rgba(11, 90, 50, 0.25) !important; }
+    div[data-baseweb="tab-highlight"] { display: none !important; }
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; border-bottom: 2px solid #e2e8f0; }
+    .stTabs [data-baseweb="tab"] { background-color: transparent; border: none; border-bottom: 3px solid transparent; padding: 10px 20px; font-weight: 500; color: #718096; }
+    .stTabs [aria-selected="true"] { color: #0b5a32 !important; border-bottom: 3px solid #0b5a32 !important; background-color: transparent !important; font-weight: 700 !important; }
+    div[data-testid="metric-container"] { background-color: #ffffff; border: 2px solid #e2e8f0; border-left: 6px solid #0b5a32; padding: 24px; border-radius: 12px; box-shadow: 0px 4px 12px rgba(0,0,0,0.03); }
+    h1 { color: #0b5a32 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; margin-bottom: 4px !important; }
+    h2, h3, h4 { color: #2d3748 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 600 !important; }
+    div[data-testid="stFileUploader"] { background-color: #ffffff; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- CABECERA PRINCIPAL (DISEÑO AMPLIO Y ALINEADO) ---
+# --- CABECERA PRINCIPAL ---
 header_col1, header_col2 = st.columns([1.2, 6], vertical_alignment="center")
 
 with header_col1:
@@ -131,7 +52,7 @@ with header_col2:
     st.markdown("<p style='color: #718096; font-size: 1.1rem; margin-top: -6px;'>Plataforma Digital de Cribado de Amiloidosis Cardíaca | Unidad de Cardiología</p>", unsafe_allow_html=True)
 
 # --- PESTAÑAS DE TRABAJO ---
-tab1, tab2 = st.tabs(["📋 Evaluación de Paciente Individual", "📊 Validación Retrospectiva por Lotes"])
+tab1, tab2 = st.tabs(["📋 Evaluación de Paciente Individual", "🧠 Entrenamiento de Modelo Local"])
 
 with tab1:
     st.write("")
@@ -157,18 +78,11 @@ with tab1:
                         texto_completo += texto + "\n"
             
             patrones_nombres = {
-                'Glucosa': r'Glucosa',
-                'Trigliceridos': r'Triglic[eé]ridos|Triglic',
-                'Colesterol': r'Colesterol',
-                'Colinesterasa': r'Colinesterasa',
-                'Gamma_GT': r'Gamma\s*glutamiltransferasa|Gamma[\s-]*GT|G\.G\.T',
-                'Albumina': r'Alb[uú]mina',
-                'MCH': r'Hemoglobina\s*corpuscular\s*media|HCM',
-                'Cloruro': r'Cloruro',
-                'Magnesio': r'Magnesio',
-                'Hb_libre': r'Hemoglobina(?!\s*glicosilada|\s*corpuscular)',
-                'Alfa_amilasa': r'Alfa[\s-]*amilasa|Amilasa',
-                'PCR': r'Prote[ií]na\s*C\s*reactiva|PCR'
+                'Glucosa': r'Glucosa', 'Trigliceridos': r'Triglic[eé]ridos|Triglic', 'Colesterol': r'Colesterol',
+                'Colinesterasa': r'Colinesterasa', 'Gamma_GT': r'Gamma\s*glutamiltransferasa|Gamma[\s-]*GT|G\.G\.T',
+                'Albumina': r'Alb[uú]mina', 'MCH': r'Hemoglobina\s*corpuscular\s*media|HCM', 'Cloruro': r'Cloruro',
+                'Magnesio': r'Magnesio', 'Hb_libre': r'Hemoglobina(?!\s*glicosilada|\s*corpuscular)',
+                'Alfa_amilasa': r'Alfa[\s-]*amilasa|Amilasa', 'PCR': r'Prote[ií]na\s*C\s*reactiva|PCR'
             }
 
             variables_encontradas = 0
@@ -185,7 +99,6 @@ with tab1:
         except Exception as e:
             st.error(f"Error en la lectura automatizada del documento: {e}")
 
-    # Acordeón integrado para revisión manual
     st.write("")
     with st.expander("Ver y verificar valores bioquímicos extraídos", expanded=(pdf_subido is None)):
         st.markdown("<p style='color: #4a5568; font-size: 0.95rem; margin-bottom: 15px;'>Modifica o introduce valores si el parámetro no constaba en el PDF original:</p>", unsafe_allow_html=True)
@@ -243,7 +156,7 @@ with tab1:
             
             with res_col1:
                 st.metric(label="Score Logístico Bruto", value=score)
-                st.caption("Puntuación matemática sujeta a calibración local.")
+                st.caption("Score calculado en base al modelo original.")
                 
             with res_col2:
                 st.markdown("#### Estratificación del Paciente")
@@ -262,39 +175,29 @@ with tab1:
 
 with tab2:
     st.write("")
-    st.markdown("### 📊 Calibración del Modelo (Ajuste Epidemiológico Local)")
-    st.markdown("Carga la base de datos anonimizada del hospital (formato `.xlsx` o `.csv`) que contenga los históricos de pacientes confirmados y controles para realizar el ajuste multivariante de la constante matemática del algoritmo.")
+    st.markdown("### 🧠 Creación de Score Local (Regresión Logística)")
+    st.markdown("Entrena un nuevo modelo matemático usando tu base de datos para generar coeficientes específicos para la unidad.")
     
-    archivo_csv = st.file_uploader("Seleccionar base de datos de validación", type=["xlsx", "csv"])
+    archivo_csv = st.file_uploader("Seleccionar base de datos clínica (.xlsx / .csv)", type=["xlsx", "csv"])
     
-    # Función para limpiar los datos sucios del Excel
-    def limpiar_valor(val):
-        if pd.isna(val): return 0.0
+    def limpiar_valor_para_entrenamiento(val):
+        if pd.isna(val): return np.nan
         val_str = str(val).strip().upper().replace(',', '.')
-        if val_str in ['NP', 'MHC', 'MNR', '-', 'MAR', '']: return 0.0
-        if '<' in val_str or '>' in val_str:
-            return float(re.sub(r'[<>]', '', val_str).strip())
-        try:
-            return float(val_str)
-        except:
-            return 0.0
+        if val_str in ['NP', 'MHC', 'MNR', '-', 'MAR', '']: return np.nan
+        if '<' in val_str or '>' in val_str: return float(re.sub(r'[<>]', '', val_str).strip())
+        try: return float(val_str)
+        except: return np.nan
 
     if archivo_csv is not None:
         try:
-            if archivo_csv.name.endswith('.csv'):
-                df = pd.read_csv(archivo_csv)
-            else:
-                df = pd.read_excel(archivo_csv)
+            if archivo_csv.name.endswith('.csv'): df = pd.read_csv(archivo_csv)
+            else: df = pd.read_excel(archivo_csv)
                 
-            st.success(f"✅ Muestra de datos estructurada cargada en memoria con éxito: {len(df)} pacientes.")
+            st.success(f"✅ Base de datos cargada: {len(df)} pacientes listos para entrenamiento.")
             st.write("")
             
-            if st.button("Iniciar Calibración Multivariante y Ajuste ROC", use_container_width=True):
-                scores_validos = []
-                diagnosticos_validos = []
-                pacientes_excluidos = 0
-                
-                # Mapeo a prueba de errores (acepta las cabeceras nuevas con erratas de tu último Excel)
+            if st.button("🚀 Entrenar Score Local y Calcular Rendimiento", use_container_width=True):
+                # 1. Mapeo adaptado a las columnas que existen en tu Excel
                 mapa_columnas = {
                     'Glucosa': 'Glucosa', 'Gluosa': 'Glucosa', 
                     'Triglicéridos': 'Trigliceridos', 'Trigliéridos': 'Trigliceridos', 
@@ -307,72 +210,84 @@ with tab2:
                     'PCR': 'PCR', 'PR': 'PCR'
                 }
                 
-                # Llaves necesarias para el motor de algoritmo
-                keys_motor = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Colinesterasa', 'Gamma_GT', 'Albumina', 'MCH', 'Cloruro', 'Magnesio', 'Hb_libre', 'Alfa_amilasa', 'PCR']
+                parametros_en_excel = list(set(mapa_columnas.values()))
                 
-                # Detectar columna de diagnóstico
+                # 2. Extracción y limpieza estructurada para el algoritmo
+                datos_limpios = []
                 col_diagnostico = 'Diagnóstio final' if 'Diagnóstio final' in df.columns else 'Diagnóstico final'
                 
-                barra_progreso = st.progress(0)
-                
                 for index, row in df.iterrows():
-                    datos_fila = {k: 0.0 for k in keys_motor} 
-                    
-                    # Extraer y limpiar los datos que sí vienen en el Excel
+                    fila_dict = {}
                     for col_excel in df.columns:
                         if col_excel in mapa_columnas:
                             col_motor = mapa_columnas[col_excel]
-                            datos_fila[col_motor] = limpiar_valor(row[col_excel])
-                    
-                    resultado = procesar_analitica_paciente(datos_fila)
-                    
-                    if resultado['estado'] == 'OK':
-                        score = calcular_score_bruto(resultado['datos_procesados'])
-                        scores_validos.append(score)
-                        diagnosticos_validos.append(int(row[col_diagnostico]))
-                    else:
-                        pacientes_excluidos += 1
-                        
-                    barra_progreso.progress((index + 1) / len(df))
+                            fila_dict[col_motor] = limpiar_valor_para_entrenamiento(row[col_excel])
+                    fila_dict['Diagnostico'] = int(row[col_diagnostico])
+                    datos_limpios.append(fila_dict)
+                
+                df_limpio = pd.DataFrame(datos_limpios)
+                
+                # 3. Preparación de datos (Machine Learning Pipeline)
+                X = df_limpio.drop('Diagnostico', axis=1)
+                y = df_limpio['Diagnostico']
+                
+                # Imputación: Rellenamos valores vacíos (NP) con la mediana de NUESTRA propia muestra
+                imputer = SimpleImputer(strategy='median')
+                X_imputed = imputer.fit_transform(X)
+                
+                # 4. Entrenamiento del Modelo (Regresión Logística como en el estudio)
+                clf = LogisticRegression(max_iter=2000, class_weight='balanced')
+                clf.fit(X_imputed, y)
+                
+                # 5. Generación del "Score Local"
+                predicciones_prob = clf.predict_proba(X_imputed)[:, 1]
+                coeficientes = clf.coef_[0]
+                intercepto = clf.intercept_[0]
                 
                 st.markdown("---")
-                col_m1, col_m2, col_m3 = st.columns(3)
-                col_m1.metric("Pacientes Válidos Analizados", f"{len(scores_validos)}")
-                col_m2.metric("Pacientes Excluidos (Faltan datos)", f"{pacientes_excluidos}")
+                st.markdown("### 🧬 El Nuevo Score CardioGen")
+                st.markdown("El modelo ha calculado sus propios pesos basados en los patrones de los pacientes andaluces.")
                 
-                # --- MATEMÁTICAS ROC Y PUNTO DE CORTE ---
-                if len(set(diagnosticos_validos)) > 1: 
-                    fpr, tpr, thresholds = roc_curve(diagnosticos_validos, scores_validos)
+                # Mostrar la ecuación matemática
+                ecuacion = f"**Score** = {intercepto:.4f} "
+                for i, col in enumerate(X.columns):
+                    signo = "+" if coeficientes[i] >= 0 else "-"
+                    ecuacion += f"{signo} ({abs(coeficientes[i]):.4f} × {col}) "
+                
+                st.info(ecuacion)
+                
+                # 6. Evaluación de Curva ROC
+                if len(set(y)) > 1:
+                    fpr, tpr, thresholds = roc_curve(y, predicciones_prob)
                     roc_auc = auc(fpr, tpr)
                     
-                    # Índice de Youden (Máxima Sensibilidad + Especificidad - 1)
                     youden_index = tpr - fpr
                     best_threshold_idx = youden_index.argmax()
                     best_threshold = thresholds[best_threshold_idx]
                     sensibilidad = tpr[best_threshold_idx]
                     especificidad = 1 - fpr[best_threshold_idx]
                     
-                    col_m3.metric("Área bajo la curva (AUC)", f"{roc_auc:.2f}")
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Variables Entrenadas", len(X.columns))
+                    c2.metric("Área bajo la curva (AUC)", f"{roc_auc:.3f}")
+                    c3.metric("Sensibilidad Máxima", f"{sensibilidad*100:.1f}%")
                     
-                    st.markdown(f"### 🎯 Punto de Corte Óptimo (Calibración Local): **{best_threshold:.2f}**")
-                    st.info(f"Si configuras el límite de alerta en **{best_threshold:.2f}**, la herramienta detectará la enfermedad con una **Sensibilidad del {sensibilidad*100:.1f}%** y una **Especificidad del {especificidad*100:.1f}%**.")
-                    
-                    # Dibujar Gráfica ROC
+                    # Gráfica ROC
                     fig, ax = plt.subplots(figsize=(8, 6))
-                    ax.plot(fpr, tpr, color='#0b5a32', lw=2, label=f'Curva ROC (AUC = {roc_auc:.2f})')
+                    ax.plot(fpr, tpr, color='#0b5a32', lw=2, label=f'Score Local (AUC = {roc_auc:.3f})')
                     ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
-                    ax.scatter(fpr[best_threshold_idx], tpr[best_threshold_idx], color='red', s=100, label=f'Punto de Corte Óptimo ({best_threshold:.2f})', zorder=5)
+                    ax.scatter(fpr[best_threshold_idx], tpr[best_threshold_idx], color='red', s=100, label=f'Punto Óptimo: Prob > {best_threshold:.2f}', zorder=5)
                     ax.set_xlim([0.0, 1.0])
                     ax.set_ylim([0.0, 1.05])
-                    ax.set_xlabel('Tasa de Falsos Positivos (1 - Especificidad)')
-                    ax.set_ylabel('Tasa de Verdaderos Positivos (Sensibilidad)')
-                    ax.set_title('Rendimiento Diagnóstico del Algoritmo en Población Local')
+                    ax.set_xlabel('1 - Especificidad (Falsos Positivos)')
+                    ax.set_ylabel('Sensibilidad (Verdaderos Positivos)')
+                    ax.set_title('Rendimiento del Nuevo Score Entrenado con Datos de Jaén')
                     ax.legend(loc="lower right")
                     ax.grid(alpha=0.3)
                     
                     st.pyplot(fig)
                 else:
-                    st.warning("⚠️ La base de datos no contiene una mezcla válida de casos (1) y controles (0) para generar la curva ROC.")
+                    st.warning("⚠️ No se puede calcular la curva ROC (faltan controles o casos confirmados en la muestra).")
                     
         except Exception as e:
-            st.error(f"Error al procesar la base de datos: {e}")
+            st.error(f"Error procesando la base de datos para el entrenamiento: {e}")
