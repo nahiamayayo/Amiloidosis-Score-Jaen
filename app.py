@@ -3,6 +3,8 @@ import pandas as pd
 import re
 import pdfplumber
 import os
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
 # Configuración de la página: Cambiamos a 'wide' para que no se vea tan condensado
@@ -116,12 +118,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- CABECERA PRINCIPAL (DISEÑO AMPLIO Y ALINEADO) ---
-# Ajustamos a [1.2, 6] para dar más espacio al logo y añadimos alineación vertical centrada
 header_col1, header_col2 = st.columns([1.2, 6], vertical_alignment="center")
 
 with header_col1:
     if os.path.exists("huj.png"):
-        # Usamos el ancho del contenedor en lugar de píxeles fijos
         st.image("huj.png", use_container_width=True) 
     else:
         st.warning("Logo")
@@ -185,32 +185,31 @@ with tab1:
         except Exception as e:
             st.error(f"Error en la lectura automatizada del documento: {e}")
 
-    # Acordeón integrado para revisión manual (con más aire entre columnas)
+    # Acordeón integrado para revisión manual
     st.write("")
     with st.expander("Ver y verificar valores bioquímicos extraídos", expanded=(pdf_subido is None)):
         st.markdown("<p style='color: #4a5568; font-size: 0.95rem; margin-bottom: 15px;'>Modifica o introduce valores si el parámetro no constaba en el PDF original:</p>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns(3, gap="large") # gap="large" da mucho más espacio horizontal
+        col1, col2, col3 = st.columns(3, gap="large") 
         with col1:
-            glucosa = st.number_input("Glucosa (mg/dL)", value=valores_extraidos['Glucosa'])
-            trigliceridos = st.number_input("Triglicéridos (mg/dL)", value=valores_extraidos['Trigliceridos'])
-            colesterol = st.number_input("Colesterol Total (mg/dL)", value=valores_extraidos['Colesterol'])
-            cloruro = st.number_input("Cloruro (mmol/L)", value=valores_extraidos['Cloruro'])
+            glucosa = st.number_input("Glucosa (mg/dL)", value=valores_extraidos['Glucosa'] if valores_extraidos['Glucosa'] is not None else 0.0)
+            trigliceridos = st.number_input("Triglicéridos (mg/dL)", value=valores_extraidos['Trigliceridos'] if valores_extraidos['Trigliceridos'] is not None else 0.0)
+            colesterol = st.number_input("Colesterol Total (mg/dL)", value=valores_extraidos['Colesterol'] if valores_extraidos['Colesterol'] is not None else 0.0)
+            cloruro = st.number_input("Cloruro (mmol/L)", value=valores_extraidos['Cloruro'] if valores_extraidos['Cloruro'] is not None else 0.0)
         with col2:
-            colinesterasa = st.number_input("Colinesterasa (kU/L)", value=valores_extraidos['Colinesterasa'])
-            gamma_gt = st.number_input("Gamma-GT (U/L)", value=valores_extraidos['Gamma_GT'])
-            albumina = st.number_input("Albúmina (g/L)", value=valores_extraidos['Albumina'])
-            magnesio = st.number_input("Magnesio (mmol/L)", value=valores_extraidos['Magnesio'])
+            colinesterasa = st.number_input("Colinesterasa (kU/L)", value=valores_extraidos['Colinesterasa'] if valores_extraidos['Colinesterasa'] is not None else 0.0)
+            gamma_gt = st.number_input("Gamma-GT (U/L)", value=valores_extraidos['Gamma_GT'] if valores_extraidos['Gamma_GT'] is not None else 0.0)
+            albumina = st.number_input("Albúmina (g/L)", value=valores_extraidos['Albumina'] if valores_extraidos['Albumina'] is not None else 0.0)
+            magnesio = st.number_input("Magnesio (mmol/L)", value=valores_extraidos['Magnesio'] if valores_extraidos['Magnesio'] is not None else 0.0)
         with col3:
-            mch = st.number_input("MCH (pg)", value=valores_extraidos['MCH'])
-            hemoglobina_libre = st.number_input("Hb libre (µmol/L)", value=valores_extraidos['Hb_libre'])
-            alfa_amilasa = st.number_input("Alfa-amilasa (U/L)", value=valores_extraidos['Alfa_amilasa'])
-            pcr = st.number_input("PCR (mg/dL)", value=valores_extraidos['PCR'])
+            mch = st.number_input("MCH (pg)", value=valores_extraidos['MCH'] if valores_extraidos['MCH'] is not None else 0.0)
+            hemoglobina_libre = st.number_input("Hb libre (µmol/L)", value=valores_extraidos['Hb_libre'] if valores_extraidos['Hb_libre'] is not None else 0.0)
+            alfa_amilasa = st.number_input("Alfa-amilasa (U/L)", value=valores_extraidos['Alfa_amilasa'] if valores_extraidos['Alfa_amilasa'] is not None else 0.0)
+            pcr = st.number_input("PCR (mg/dL)", value=valores_extraidos['PCR'] if valores_extraidos['PCR'] is not None else 0.0)
 
     st.write("")
     st.markdown("---")
     st.write("")
     
-    # Botón centrado usando columnas vacías a los lados
     col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
     with col_btn2:
         calcular = st.button("🧬 Computar Análisis Computacional de Riesgo", use_container_width=True)
@@ -266,10 +265,114 @@ with tab2:
     st.markdown("### 📊 Calibración del Modelo (Ajuste Epidemiológico Local)")
     st.markdown("Carga la base de datos anonimizada del hospital (formato `.xlsx` o `.csv`) que contenga los históricos de pacientes confirmados y controles para realizar el ajuste multivariante de la constante matemática del algoritmo.")
     
-    archivo_subido = st.file_uploader("Seleccionar base de datos de validación", type=["xlsx", "csv"])
+    archivo_csv = st.file_uploader("Seleccionar base de datos de validación", type=["xlsx", "csv"])
     
-    if archivo_subido is not None:
-        st.success("Muestra de datos estructurada cargada en memoria con éxito.")
-        st.write("")
-        if st.button("Iniciar Calibración Multivariante y Ajuste ROC"):
-            st.info("Módulo bioinformático en desarrollo.")
+    # Función para limpiar los datos sucios del Excel
+    def limpiar_valor(val):
+        if pd.isna(val): return 0.0
+        val_str = str(val).strip().upper().replace(',', '.')
+        if val_str in ['NP', 'MHC', 'MNR', '-', 'MAR', '']: return 0.0
+        if '<' in val_str or '>' in val_str:
+            return float(re.sub(r'[<>]', '', val_str).strip())
+        try:
+            return float(val_str)
+        except:
+            return 0.0
+
+    if archivo_csv is not None:
+        try:
+            if archivo_csv.name.endswith('.csv'):
+                df = pd.read_csv(archivo_csv)
+            else:
+                df = pd.read_excel(archivo_csv)
+                
+            st.success(f"✅ Muestra de datos estructurada cargada en memoria con éxito: {len(df)} pacientes.")
+            st.write("")
+            
+            if st.button("Iniciar Calibración Multivariante y Ajuste ROC", use_container_width=True):
+                scores_validos = []
+                diagnosticos_validos = []
+                pacientes_excluidos = 0
+                
+                # Mapeo a prueba de errores (acepta las cabeceras nuevas con erratas de tu último Excel)
+                mapa_columnas = {
+                    'Glucosa': 'Glucosa', 'Gluosa': 'Glucosa', 
+                    'Triglicéridos': 'Trigliceridos', 'Trigliéridos': 'Trigliceridos', 
+                    'Colesterol': 'Colesterol', 'olesterol': 'Colesterol',
+                    'Gamma-GT': 'Gamma_GT', 
+                    'Albúmina': 'Albumina', 
+                    'MCH': 'MCH', 'MH': 'MCH', 'MHC': 'MCH',
+                    'Magnesio': 'Magnesio', 
+                    'Hemoglobina': 'Hb_libre', 
+                    'PCR': 'PCR', 'PR': 'PCR'
+                }
+                
+                # Llaves necesarias para el motor de algoritmo
+                keys_motor = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Colinesterasa', 'Gamma_GT', 'Albumina', 'MCH', 'Cloruro', 'Magnesio', 'Hb_libre', 'Alfa_amilasa', 'PCR']
+                
+                # Detectar columna de diagnóstico
+                col_diagnostico = 'Diagnóstio final' if 'Diagnóstio final' in df.columns else 'Diagnóstico final'
+                
+                barra_progreso = st.progress(0)
+                
+                for index, row in df.iterrows():
+                    datos_fila = {k: 0.0 for k in keys_motor} 
+                    
+                    # Extraer y limpiar los datos que sí vienen en el Excel
+                    for col_excel in df.columns:
+                        if col_excel in mapa_columnas:
+                            col_motor = mapa_columnas[col_excel]
+                            datos_fila[col_motor] = limpiar_valor(row[col_excel])
+                    
+                    resultado = procesar_analitica_paciente(datos_fila)
+                    
+                    if resultado['estado'] == 'OK':
+                        score = calcular_score_bruto(resultado['datos_procesados'])
+                        scores_validos.append(score)
+                        diagnosticos_validos.append(int(row[col_diagnostico]))
+                    else:
+                        pacientes_excluidos += 1
+                        
+                    barra_progreso.progress((index + 1) / len(df))
+                
+                st.markdown("---")
+                col_m1, col_m2, col_m3 = st.columns(3)
+                col_m1.metric("Pacientes Válidos Analizados", f"{len(scores_validos)}")
+                col_m2.metric("Pacientes Excluidos (Faltan datos)", f"{pacientes_excluidos}")
+                
+                # --- MATEMÁTICAS ROC Y PUNTO DE CORTE ---
+                if len(set(diagnosticos_validos)) > 1: 
+                    fpr, tpr, thresholds = roc_curve(diagnosticos_validos, scores_validos)
+                    roc_auc = auc(fpr, tpr)
+                    
+                    # Índice de Youden (Máxima Sensibilidad + Especificidad - 1)
+                    youden_index = tpr - fpr
+                    best_threshold_idx = youden_index.argmax()
+                    best_threshold = thresholds[best_threshold_idx]
+                    sensibilidad = tpr[best_threshold_idx]
+                    especificidad = 1 - fpr[best_threshold_idx]
+                    
+                    col_m3.metric("Área bajo la curva (AUC)", f"{roc_auc:.2f}")
+                    
+                    st.markdown(f"### 🎯 Punto de Corte Óptimo (Calibración Local): **{best_threshold:.2f}**")
+                    st.info(f"Si configuras el límite de alerta en **{best_threshold:.2f}**, la herramienta detectará la enfermedad con una **Sensibilidad del {sensibilidad*100:.1f}%** y una **Especificidad del {especificidad*100:.1f}%**.")
+                    
+                    # Dibujar Gráfica ROC
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    ax.plot(fpr, tpr, color='#0b5a32', lw=2, label=f'Curva ROC (AUC = {roc_auc:.2f})')
+                    ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
+                    ax.scatter(fpr[best_threshold_idx], tpr[best_threshold_idx], color='red', s=100, label=f'Punto de Corte Óptimo ({best_threshold:.2f})', zorder=5)
+                    ax.set_xlim([0.0, 1.0])
+                    ax.set_ylim([0.0, 1.05])
+                    ax.set_xlabel('Tasa de Falsos Positivos (1 - Especificidad)')
+                    ax.set_ylabel('Tasa de Verdaderos Positivos (Sensibilidad)')
+                    ax.set_title('Rendimiento Diagnóstico del Algoritmo en Población Local')
+                    ax.legend(loc="lower right")
+                    ax.grid(alpha=0.3)
+                    
+                    st.pyplot(fig)
+                else:
+                    st.warning("⚠️ La base de datos no contiene una mezcla válida de casos (1) y controles (0) para generar la curva ROC.")
+                    
+        except Exception as e:
+            st.error(f"Error al procesar la base de datos: {e}")
