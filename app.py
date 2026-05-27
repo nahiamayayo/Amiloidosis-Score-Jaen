@@ -78,11 +78,16 @@ with tab1:
                     if texto: texto_completo += texto + "\n"
             
             patrones_nombres = {
-                'Glucosa': r'Glucosa', 'Trigliceridos': r'Triglic[eé]ridos|Triglic', 'Colesterol': r'Colesterol',
+                'Glucosa': r'Glucosa',
+                'Trigliceridos': r'Triglic[eé]ridos|Triglic',
+                'Colesterol': r'Colesterol',
                 'Gamma_GT': r'Gamma\s*glutamiltransferasa|Gamma[\s-]*GT|G\.G\.T',
-                'Albumina': r'Alb[uú]mina', 'MCH': r'MCH|MHC|HCM',
-                'Magnesio': r'Magnesio', 'Hb_libre': r'Hemoglobina(?!\s*glicosilada|\s*corpuscular)',
-                'PCR': r'Prote[ií]na\s*C\s*reactiva|PCR', 'proBNP': r'proBNP|NT-proBNP'
+                'Albumina': r'Alb[uú]mina',
+                'MCH': r'Hemoglobina\s*corpuscular\s*media|HCM|MCH',
+                'Magnesio': r'Magnesio',
+                'Hb_libre': r'Hemoglobina(?!\s*glicosilada|\s*corpuscular)',
+                'PCR': r'Prote[ií]na\s*C\s*reactiva|PCR',
+                'proBNP': r'pro-p[eé]ptido\s*natriur[eé]tico\s*cerebral|proBNP|NT-proBNP'
             }
 
             for clave, patron in patrones_nombres.items():
