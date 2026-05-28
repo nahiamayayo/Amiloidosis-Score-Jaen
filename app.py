@@ -4,6 +4,7 @@ import numpy as np
 import re
 import pdfplumber
 import os
+import pickle
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc
 from sklearn.calibration import calibration_curve
@@ -13,7 +14,7 @@ from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import StandardScaler
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 
-# --- CONFIGURACIÓN E INICIALIZACIÓN DE MEMORIA ---
+# --- CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(
     page_title="Amiloidosis-Score-Jaén", 
     page_icon="🫀", 
@@ -21,9 +22,20 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Inicializamos la memoria de la app para guardar el modelo local
-if 'modelo_entrenado' not in st.session_state:
-    st.session_state['modelo_entrenado'] = False
+# --- CARGA AUTOMÁTICA DEL MODELO (PERSISTENCIA) ---
+# Aquí la app busca si ya existe un modelo guardado en el servidor
+ruta_modelo = 'modelo_jaen.pkl'
+if os.path.exists(ruta_modelo):
+    with open(ruta_modelo, 'rb') as archivo:
+        datos_guardados = pickle.load(archivo)
+        st.session_state['modelo_entrenado'] = True
+        st.session_state['clf_jaen'] = datos_guardados['clf']
+        st.session_state['imputer_jaen'] = datos_guardados['imputer']
+        st.session_state['scaler_jaen'] = datos_guardados['scaler']
+        st.session_state['columnas_jaen'] = datos_guardados['columnas']
+else:
+    if 'modelo_entrenado' not in st.session_state:
+        st.session_state['modelo_entrenado'] = False
 
 # Función de limpieza auxiliar robusta
 def limpiar_valor_para_entrenamiento(val):
@@ -48,8 +60,6 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] { background-color: transparent; border: none; border-bottom: 3px solid transparent; padding: 10px 20px; font-weight: 500; color: #718096; }
     .stTabs [aria-selected="true"] { color: #0b5a32 !important; border-bottom: 3px solid #0b5a32 !important; background-color: transparent !important; font-weight: 700 !important; }
     h1 { color: #0b5a32 !important; font-weight: 700 !important; margin-bottom: 4px !important; }
-    
-    /* Estilo para el selector de modelos */
     div.row-widget.stRadio > div { flex-direction:row; justify-content: center; background-color: #e2e8f0; padding: 10px; border-radius: 10px; }
 </style>
 """, unsafe_allow_html=True)
@@ -62,7 +72,7 @@ with header_col2:
     st.title("Amiloidosis-Score-Jaén")
     st.markdown("<p style='color: #718096; font-size: 1.1rem; margin-top: -6px;'>Plataforma Digital de Cribado | Unidad de Cardiología</p>", unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["📋 Evaluación de Paciente Individual", "🧠 Entrenamiento de Modelo Local"])
+tab1, tab2 = st.tabs(["📋 Evaluación de Paciente Individual", "🧠 Módulo de Actualización del Modelo"])
 
 # --- PESTAÑA 1: EVALUACIÓN ---
 with tab1:
@@ -100,13 +110,11 @@ with tab1:
     st.markdown("---")
     st.markdown("### 2. Motor Predictivo")
     
-    # EL INTERRUPTOR CLÍNICO
     tipo_modelo = st.radio("Selecciona el algoritmo de estratificación:", 
-                           ["Modelo Austríaco (Estudio Original)", "Modelo CardioGen Jaén (Calibrado Localmente)"])
+                           ["Modelo CardioGen Jaén (Calibrado Localmente)", "Modelo Austríaco (Estudio Original)"])
     
     if st.button("🧬 Computar Análisis", use_container_width=True):
         if tipo_modelo == "Modelo Austríaco (Estudio Original)":
-            # Usar el motor original estático
             resultado = procesar_analitica_paciente(valores_extraidos)
             if resultado['estado'] == "ERROR":
                 st.error(resultado['mensaje'])
@@ -123,19 +131,16 @@ with tab1:
                     else: st.success("Bajo Riesgo Clínico")
                     
         else:
-            # Usar el nuevo motor dinámico local
             if not st.session_state['modelo_entrenado']:
-                st.error("⚠️ El Score CardioGen Jaén aún no está entrenado. Ve a la Pestaña 2, sube tu base de datos y entrena el modelo primero.")
+                st.error("⚠️ El Score CardioGen Jaén aún no está configurado. El administrador debe ir a la Pestaña 2 y entrenar el modelo por primera vez.")
             else:
-                st.success("🧠 Usando el algoritmo entrenado localmente con datos de Jaén.")
+                st.success("🧠 Algoritmo local CardioGen Jaén activado.")
                 
-                # Preparamos los datos del paciente para el modelo de ML
                 datos_paciente = []
                 for col in st.session_state['columnas_jaen']:
                     val = valores_extraidos.get(col, 0.0)
                     datos_paciente.append(np.nan if val == 0.0 else val)
                 
-                # Transformación: Imputar -> Escalar -> Predecir
                 X_paciente = np.array(datos_paciente).reshape(1, -1)
                 X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
                 X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
@@ -147,16 +152,16 @@ with tab1:
                 
                 with col2:
                     if probabilidad < 0.25:
-                        st.success("🟢 Riesgo Bajo (< 25%). Control rutinario.")
+                        st.success("🟢 Riesgo Bajo (< 25%). Protocolo de control rutinario.")
                     elif probabilidad < 0.60:
-                        st.warning("🟡 Riesgo Moderado (25% - 60%). Valoración cardiológica.")
+                        st.warning("🟡 Riesgo Moderado (25% - 60%). Valorar derivación o pruebas específicas.")
                     else:
-                        st.error("🚨 Riesgo Alto (> 60%). Evaluación urgente / Ecocardiograma.")
+                        st.error("🚨 Riesgo Alto (> 60%). Indicación prioritaria de Ecocardiograma / Gammagrafía.")
 
 # --- PESTAÑA 2: ENTRENAMIENTO ---
 with tab2:
-    st.markdown("### 🧠 Entrenamiento del 'Score CardioGen Jaén'")
-    st.info("Al entrenar el modelo aquí, se actualizará el algoritmo de la Pestaña 1 con los datos locales más recientes.")
+    st.markdown("### 🧠 Módulo de Actualización del 'Score CardioGen Jaén'")
+    st.info("Sube la base de datos histórica de la unidad para recalibrar el algoritmo. Una vez entrenado, el modelo quedará guardado para uso clínico en la Pestaña 1.")
     archivo_csv = st.file_uploader("Cargar Base de Datos (.xlsx / .csv)", type=["xlsx", "csv"])
     
     if archivo_csv:
@@ -171,7 +176,7 @@ with tab2:
         df_limpio = df.rename(columns=traductor)
         columnas_finales = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Gamma_GT', 'Albumina', 'MCH', 'Magnesio', 'Hb_libre', 'PCR', 'proBNP']
         
-        if st.button("🚀 Entrenar Score Clínico Local", use_container_width=True):
+        if st.button("🚀 Iniciar Calibración Local", use_container_width=True):
             try:
                 X = df_limpio[columnas_finales].apply(lambda col: col.map(limpiar_valor_para_entrenamiento))
                 y = df_limpio['Diagnóstico final']
@@ -185,22 +190,32 @@ with tab2:
                 clf = LogisticRegression(max_iter=2000, class_weight='balanced')
                 clf.fit(X_scaled, y)
                 
-                # GUARDAR EN MEMORIA (Session State)
+                # --- AQUÍ SE GUARDA FÍSICAMENTE EL MODELO ---
+                datos_a_guardar = {
+                    'clf': clf,
+                    'imputer': imputer,
+                    'scaler': scaler,
+                    'columnas': columnas_finales
+                }
+                with open(ruta_modelo, 'wb') as archivo:
+                    pickle.dump(datos_a_guardar, archivo)
+                
+                # Actualizar sesión activa
                 st.session_state['modelo_entrenado'] = True
                 st.session_state['clf_jaen'] = clf
                 st.session_state['imputer_jaen'] = imputer
                 st.session_state['scaler_jaen'] = scaler
                 st.session_state['columnas_jaen'] = columnas_finales
                 
-                st.success("✅ Modelo entrenado y guardado en memoria. Ya puedes usarlo en la Pestaña 1.")
+                st.success("💾 ¡Calibración exitosa! El nuevo algoritmo ha sido instalado en el servidor. Ya puedes volver a la Pestaña 1 y utilizarlo sin necesidad de subir la base de datos de nuevo.")
                 st.markdown("---")
                 
-                st.metric("Fiabilidad (Cross-Validation)", f"{cross_val_score(clf, X_scaled, y, cv=5).mean():.2%}")
+                st.metric("Consistencia Diagnóstica (Cross-Validation)", f"{cross_val_score(clf, X_scaled, y, cv=5).mean():.2%}")
                 
-                st.markdown("### 🧬 Importancia de Variables")
+                st.markdown("### 🧬 Impacto de Variables en el Diagnóstico")
                 importancias = pd.DataFrame({'Variable': columnas_finales, 'Peso': np.abs(clf.coef_[0])}).sort_values('Peso', ascending=False)
                 fig, ax = plt.subplots(); importancias.plot(kind='barh', x='Variable', y='Peso', ax=ax, color='#0b5a32')
                 st.pyplot(fig)
                 
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Error durante la calibración: {e}")
