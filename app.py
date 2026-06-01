@@ -5,6 +5,7 @@ import re
 import pdfplumber
 import os
 import pickle
+import matplotlib.subplots as plt_sub # Importado correctamente internamente abajo
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc, confusion_matrix
 from sklearn.calibration import calibration_curve
@@ -152,11 +153,6 @@ with tab1:
                 
                 # INFORME PARA HISTORIA CLÍNICA
                 st.write("")
-                with st.expander("📝 Copiar para Historia Clínica (Diraya)"):
-                    st.code(f"""VALORACIÓN PROTOCOLO CARDIOGEN JAÉN
------------------------------------
-# INFORME PARA HISTORIA CLÍNICA
-                st.write("")
                 with st.expander("📝 Copiar Informe para Historia Clínica (Diraya)"):
                     informe = (
                         "========================================================\n"
@@ -272,7 +268,6 @@ with tab3:
                 st.session_state['umbral_jaen'] = nuevo_umbral
             
             # --- MODELO 2: NO LINEAL (XGBoost) ---
-            from xgboost import XGBClassifier
             # Configuramos XGBoost para manejar el desbalanceo y los datos
             scale_pos_weight = (len(y_train) - sum(y_train)) / sum(y_train) if sum(y_train) > 0 else 1
             clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
