@@ -50,7 +50,12 @@ st.markdown("""
     
     /* Logos y Cabeceras */
     div[data-testid="stImage"] { display: flex; align-items: center; justify-content: center; }
-    div[data-testid="stImage"] img { max-height: 90px !important; width: auto !important; }
+    div[data-testid="stImage"] img { 
+        max-height: 90px !important; 
+        width: auto !important; 
+        border-radius: 0px !important; /* FORZAMOS ESQUINAS RECTAS */
+        box-shadow: none !important;
+    }
     h1 { color: #0b5a32 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 800 !important; letter-spacing: -0.5px; }
     h2, h3, h4 { color: #1e293b !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; }
     
