@@ -244,7 +244,7 @@ with tab2:
             tooltip=['Biomarcador', 'Coeficiente (Peso)']
         ).properties(
             title='Impacto de cada variable en el Score CardioGen Jaén',
-            height=450 # Altura forzada para que las barras sean gruesas y legibles
+            height=450
         ).interactive()
 
         st.altair_chart(grafico, use_container_width=True)
@@ -302,16 +302,41 @@ with tab3:
             col_m1.metric("AUC (Modelo Lineal)", f"{auc_lr:.3f}")
             col_m2.metric("AUC (Modelo XGBoost)", f"{auc_xgb:.3f}")
             
-            # Gráfica Comparativa ROC
+            # --- GRÁFICA COMPARATIVA ROC VECTORIAL (ALTAIR CON TAMAÑO FORZADO) ---
             st.markdown("#### 📈 Curvas ROC Comparativas")
-            fig, ax = plt.subplots(figsize=(8,6))
-            ax.plot(fpr_lr, tpr_lr, color='#0b5a32', lw=2, label=f'Lineal (AUC = {auc_lr:.3f})')
-            ax.plot(fpr_xgb, tpr_xgb, color='#e67e22', lw=2, linestyle='--', label=f'XGBoost (AUC = {auc_xgb:.3f})')
-            ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle=':')
-            ax.set_xlabel('Tasa de Falsos Positivos (1 - Especificidad)')
-            ax.set_ylabel('Tasa de Verdaderos Positivos (Sensibilidad)')
-            ax.legend(loc="lower right")
-            st.pyplot(fig)
+            
+            # Preparar datos para Altair
+            df_lr = pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Lineal (AUC = {auc_lr:.3f})'})
+            df_xgb = pd.DataFrame({'FPR': fpr_xgb, 'TPR': tpr_xgb, 'Modelo': f'XGBoost (AUC = {auc_xgb:.3f})'})
+            df_ref = pd.DataFrame({'FPR': [0, 1], 'TPR': [0, 1], 'Modelo': 'Referencia Aleatoria'})
+            
+            df_roc = pd.concat([df_lr, df_xgb, df_ref])
+            
+            # Generar gráfico forzando el tamaño explícitamente para evitar el bug de las pestañas
+            roc_chart = alt.Chart(df_roc).mark_line(size=3).encode(
+                x=alt.X('FPR:Q', title='Tasa de Falsos Positivos (1 - Especificidad)'),
+                y=alt.Y('TPR:Q', title='Tasa de Verdaderos Positivos (Sensibilidad)'),
+                color=alt.Color('Modelo:N', scale=alt.Scale(
+                    domain=[f'Lineal (AUC = {auc_lr:.3f})', f'XGBoost (AUC = {auc_xgb:.3f})', 'Referencia Aleatoria'],
+                    range=['#0b5a32', '#e67e22', 'gray']
+                ), legend=alt.Legend(title="Algoritmo Predictivo", orient='bottom-right')),
+                strokeDash=alt.condition(
+                    alt.datum.Modelo == 'Referencia Aleatoria',
+                    alt.value([5, 5]),  # Línea de puntos para la referencia
+                    alt.value([0])      # Líneas continuas para los modelos
+                ),
+                tooltip=[
+                    alt.Tooltip('Modelo:N', title='Modelo'), 
+                    alt.Tooltip('FPR:Q', title='FPR', format='.3f'), 
+                    alt.Tooltip('TPR:Q', title='TPR', format='.3f')
+                ]
+            ).properties(
+                width=900,  # <-- FORZAMOS ANCHO
+                height=550  # <-- FORZAMOS ALTO
+            ).interactive()
+            
+            # use_container_width=False es clave aquí para que no vuelva a encogerse
+            st.altair_chart(roc_chart, use_container_width=False) 
             
     else:
         st.warning("Carga el archivo Excel arriba para realizar la auditoría.")
