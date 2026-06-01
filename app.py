@@ -158,7 +158,7 @@ with tab1:
 # INFORME PARA HISTORIA CLÍNICA
                 st.write("")
                 with st.expander("📝 Copiar Informe para Historia Clínica (Diraya)"):
-                    st.code(f"""========================================================
+                    informe = f"""========================================================
 INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN
 ========================================================
 
@@ -178,7 +178,9 @@ Los valores no disponibles en la analítica primaria han sido
 estimados de forma automatizada mediante imputación estadística 
 (mediana poblacional de la cohorte local) para asegurar la 
 validez predictiva del modelo.
-========================================================""", language="text")
+========================================================"""
+                    
+                    st.code(informe, language="text")
 
 # ==========================================
 # PESTAÑA 2 Y 3: ENTRENAMIENTO Y AUDITORÍA
