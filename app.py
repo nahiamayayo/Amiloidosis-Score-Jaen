@@ -13,6 +13,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.model_selection import cross_val_score, train_test_split
 from sklearn.preprocessing import StandardScaler
 from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
+from xgboost import XGBClassifier
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(page_title="Amiloidosis-Score-Jaén", page_icon="🫀", layout="wide", initial_sidebar_state="collapsed")
@@ -186,13 +187,13 @@ def preparar_datos_csv():
             y = df_limpio['Diagnóstico final']
             return X, y, columnas_finales
         except Exception as e:
-            st.error(f"Error procesando el Excel: Asegúrate de tener la columna 'Diagnóstico final'. Detalle: {e}")
+            st.error(f"Error procesando el Excel. Detalle: {e}")
             return None, None, None
     return None, None, None
 
 with tab2:
-    st.markdown("### 🧠 Calibración Básica del Motor")
-    st.info("Sube la base de datos para actualizar los coeficientes y las medianas de imputación.")
+    st.markdown("### 🧠 Calibración del Modelo Lineal (Regresión Logística)")
+    st.info("Entrena el modelo base y extrae los coeficientes matemáticos exactos para la documentación clínica.")
     X, y, cols_finales = preparar_datos_csv()
     
     if X is not None and st.button("🚀 Iniciar Calibración", use_container_width=True):
@@ -204,45 +205,85 @@ with tab2:
         clf = LogisticRegression(max_iter=2000, class_weight='balanced')
         clf.fit(X_sca, y)
         
-        # Mantener el umbral que ya tuviéramos, o usar 25% si es la primera vez
         umbral_actual = st.session_state.get('umbral_jaen', 0.25)
         
         with open(ruta_modelo, 'wb') as archivo:
             pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': cols_finales, 'umbral': umbral_actual}, archivo)
             
         st.session_state.update({'modelo_entrenado': True, 'clf_jaen': clf, 'imputer_jaen': imputer, 'scaler_jaen': scaler, 'columnas_jaen': cols_finales})
-        st.success("✅ Motor calibrado y guardado. Los valores ausentes se imputarán ahora con la nueva base de datos.")
+        st.success("✅ Motor lineal calibrado y guardado en el servidor.")
+        
+        st.markdown("#### 📐 Coeficientes Matemáticos Exactos")
+        st.markdown("Copia estos valores para tu documento de validación. Un valor negativo indica que la disminución del parámetro suma riesgo (ej. Glucosa); un valor positivo indica que el aumento suma riesgo.")
+        
+        # Extracción exacta de coeficientes
+        df_coef = pd.DataFrame({
+            'Biomarcador': cols_finales,
+            'Coeficiente (Peso)': clf.coef_[0]
+        }).sort_values('Coeficiente (Peso)', ascending=False)
+        
+        st.dataframe(df_coef, use_container_width=True)
 
 with tab3:
-    st.markdown("### 📊 Auditoría y Definición del Umbral Clínico")
-    st.info("Este módulo divide la base de datos (75/25) para calcular estadísticamente el Punto de Corte Óptimo (Índice de Youden).")
+    st.markdown("### 📊 Auditoría Clínica y Modelos Avanzados")
+    st.info("Compara el rendimiento del modelo Lineal (Regresión) frente al No Lineal (XGBoost) utilizando un Split 75/25 de validación ciega.")
+    
     if X is not None:
-        if st.button("Generar Informe y Actualizar Umbral", use_container_width=True):
+        if st.button("Generar Informe Comparativo y Actualizar Umbral", use_container_width=True):
+            # Split de datos
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
             
+            # Preprocesamiento
             imp_val = SimpleImputer(strategy='median')
             sca_val = StandardScaler()
             X_train_sca = sca_val.fit_transform(imp_val.fit_transform(X_train))
+            X_test_sca = sca_val.transform(imp_val.transform(X_test))
             
-            clf_val = LogisticRegression(max_iter=2000, class_weight='balanced')
-            clf_val.fit(X_train_sca, y_train)
+            # --- MODELO 1: LINEAL (LogReg) ---
+            clf_lr = LogisticRegression(max_iter=2000, class_weight='balanced')
+            clf_lr.fit(X_train_sca, y_train)
+            y_pred_prob_lr = clf_lr.predict_proba(X_test_sca)[:, 1]
+            fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_test, y_pred_prob_lr)
+            auc_lr = auc(fpr_lr, tpr_lr)
             
-            y_pred_prob = clf_val.predict_proba(sca_val.transform(imp_val.transform(X_test)))[:, 1]
-            fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
+            # Umbral LogReg
+            youden_idx = np.argmax(tpr_lr - fpr_lr)
+            nuevo_umbral = thresholds_lr[youden_idx]
             
-            # Cálculo del Umbral Óptimo
-            youden_idx = np.argmax(tpr - fpr)
-            nuevo_umbral = thresholds[youden_idx]
-            
-            # Actualizamos el umbral en la memoria persistente
+            # Actualizamos el umbral en la app
             if st.session_state['modelo_entrenado']:
                 with open(ruta_modelo, 'rb') as archivo: d = pickle.load(archivo)
                 d['umbral'] = nuevo_umbral
                 with open(ruta_modelo, 'wb') as archivo: pickle.dump(d, archivo)
                 st.session_state['umbral_jaen'] = nuevo_umbral
-                st.success(f"💾 El nuevo umbral del {nuevo_umbral:.1%} se ha enlazado automáticamente con la Pestaña 1.")
             
-            st.markdown(f"#### 🎯 Nuevo Punto de Corte Clínico: **{nuevo_umbral*100:.1f}%**")
-            st.metric("Área Bajo la Curva (AUC)", f"{auc(fpr, tpr):.3f}")
+            # --- MODELO 2: NO LINEAL (XGBoost) ---
+            from xgboost import XGBClassifier
+            # Configuramos XGBoost para manejar el desbalanceo y los datos
+            scale_pos_weight = (len(y_train) - sum(y_train)) / sum(y_train) if sum(y_train) > 0 else 1
+            clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
+            clf_xgb.fit(X_train_sca, y_train)
+            y_pred_prob_xgb = clf_xgb.predict_proba(X_test_sca)[:, 1]
+            fpr_xgb, tpr_xgb, _ = roc_curve(y_test, y_pred_prob_xgb)
+            auc_xgb = auc(fpr_xgb, tpr_xgb)
+
+            # --- RENDERIZADO DEL INFORME ---
+            st.success(f"💾 Punto de Corte Clínico (Regresión Logística) fijado en: {nuevo_umbral*100:.1f}%")
+            
+            col_m1, col_m2 = st.columns(2)
+            col_m1.metric("AUC (Modelo Lineal)", f"{auc_lr:.3f}")
+            col_m2.metric("AUC (Modelo XGBoost)", f"{auc_xgb:.3f}")
+            
+            # Gráfica Comparativa ROC
+            st.markdown("#### 📈 Curvas ROC Comparativas")
+            fig, ax = plt.subplots(figsize=(8,6))
+            ax.plot(fpr_lr, tpr_lr, color='#0b5a32', lw=2, label=f'Lineal (AUC = {auc_lr:.3f})')
+            ax.plot(fpr_xgb, tpr_xgb, color='#e67e22', lw=2, linestyle='--', label=f'XGBoost (AUC = {auc_xgb:.3f})')
+            ax.plot([0, 1], [0, 1], color='gray', lw=1, linestyle=':')
+            ax.set_xlabel('Tasa de Falsos Positivos (1 - Especificidad)')
+            ax.set_ylabel('Tasa de Verdaderos Positivos (Sensibilidad)')
+            ax.legend(loc="lower right")
+            st.pyplot(fig)
+            
     else:
         st.warning("Carga el archivo Excel arriba para realizar la auditoría.")
