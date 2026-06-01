@@ -155,15 +155,30 @@ with tab1:
                 with st.expander("📝 Copiar para Historia Clínica (Diraya)"):
                     st.code(f"""VALORACIÓN PROTOCOLO CARDIOGEN JAÉN
 -----------------------------------
-Probabilidad de Amiloidosis: {probabilidad:.1%}
-Umbral de corte institucional: {umbral_clinico:.1%}
-Estratificación de Riesgo: {riesgo_texto}
+# INFORME PARA HISTORIA CLÍNICA
+                st.write("")
+                with st.expander("📝 Copiar Informe para Historia Clínica (Diraya)"):
+                    st.code(f"""========================================================
+INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN
+========================================================
 
-Biomarcadores detectados:
-- proBNP: {valores_extraidos['proBNP']}
-- Albúmina: {valores_extraidos['Albumina']}
-- Magnesio: {valores_extraidos['Magnesio']}
-(Algoritmo con imputación automática de valores ausentes según mediana local).
+RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):
+• Probabilidad predictiva del algoritmo: {probabilidad:.1%}
+• Punto de corte de seguridad (institucional): {umbral_clinico:.1%}
+• CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}
+
+PERFIL DE BIOMARCADORES DESTACADOS:
+• NT-proBNP: {valores_extraidos['proBNP']} pg/mL
+• Albúmina sérica: {valores_extraidos['Albumina']} g/dL
+• Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL
+
+* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando
+la firma bioquímica completa de 10 parámetros de rutina. 
+Los valores no disponibles en la analítica primaria han sido 
+estimados de forma automatizada mediante imputación estadística 
+(mediana poblacional de la cohorte local) para asegurar la 
+validez predictiva del modelo.
+========================================================
 """, language="text")
 
 # ==========================================
@@ -225,8 +240,8 @@ with tab2:
         st.dataframe(df_coef, use_container_width=True)
 
 with tab3:
-    st.markdown("### 📊 Auditoría Clínica y Modelos Avanzados")
-    st.info("Compara el rendimiento del modelo Lineal (Regresión) frente al No Lineal (XGBoost) utilizando un Split 75/25 de validación ciega.")
+    st.markdown("### 📊 Auditoría Clínica y Comparativa Algorítmica")
+    st.info("Módulo de validación interna mediante partición aleatoria (Hold-out 75/25). Evalúa el rendimiento diagnóstico de la Regresión Logística Multivariante frente a modelos de aprendizaje automático no lineal (Gradient Tree Boosting) para optimizar el punto de corte institucional.")
     
     if X is not None:
         if st.button("Generar Informe Comparativo y Actualizar Umbral", use_container_width=True):
