@@ -163,14 +163,14 @@ INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN
 ========================================================
 
 RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):
-• Probabilidad predictiva del algoritmo: {probabilidad:.1%}
-• Punto de corte de seguridad (institucional): {umbral_clinico:.1%}
-• CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}
+- Probabilidad predictiva del algoritmo: {probabilidad:.1%}
+- Punto de corte de seguridad (institucional): {umbral_clinico:.1%}
+- CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}
 
 PERFIL DE BIOMARCADORES DESTACADOS:
-• NT-proBNP: {valores_extraidos['proBNP']} pg/mL
-• Albúmina sérica: {valores_extraidos['Albumina']} g/dL
-• Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL
+- NT-proBNP: {valores_extraidos['proBNP']} pg/mL
+- Albúmina sérica: {valores_extraidos['Albumina']} g/dL
+- Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL
 
 * NOTA TÉCNICA: La probabilidad ha sido calculada evaluando
 la firma bioquímica completa de 10 parámetros de rutina. 
