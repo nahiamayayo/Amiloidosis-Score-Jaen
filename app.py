@@ -225,13 +225,28 @@ with tab2:
         st.markdown("#### 📐 Coeficientes Matemáticos Exactos")
         st.markdown("Copia estos valores para tu documento de validación. Un valor negativo indica que la disminución del parámetro suma riesgo (ej. Glucosa); un valor positivo indica que el aumento suma riesgo.")
         
-        # Extracción exacta de coeficientes
+        # Extracción exacta de coeficientes y Gráfico Visual
         df_coef = pd.DataFrame({
             'Biomarcador': cols_finales,
             'Coeficiente (Peso)': clf.coef_[0]
-        }).sort_values('Coeficiente (Peso)', ascending=False)
+        }).sort_values('Coeficiente (Peso)', ascending=True) # Ascendente para el gráfico
         
-        st.dataframe(df_coef, use_container_width=True)
+        fig_coef, ax_coef = plt.subplots(figsize=(10, 6))
+        # Colores: Rojo si el valor negativo suma riesgo, Verde si el positivo suma riesgo
+        colores = ['#c0392b' if x < 0 else '#0b5a32' for x in df_coef['Coeficiente (Peso)']]
+        
+        ax_coef.barh(df_coef['Biomarcador'], df_coef['Coeficiente (Peso)'], color=colores, height=0.6)
+        ax_coef.set_xlabel('Peso del Biomarcador (Coeficiente de Regresión Logística)')
+        ax_coef.set_title('Impacto de cada variable en el Score CardioGen Jaén')
+        ax_coef.grid(axis='x', linestyle='--', alpha=0.7)
+        ax_coef.axvline(x=0, color='black', linewidth=1)
+        
+        plt.tight_layout()
+        st.pyplot(fig_coef)
+        
+        # Tabla estática limpia por si los médicos quieren el número exacto
+        with st.expander("Ver tabla numérica detallada"):
+            st.table(df_coef.sort_values('Coeficiente (Peso)', ascending=False).style.format({"Coeficiente (Peso)": "{:.4f}"}))
 
 with tab3:
     st.markdown("### 📊 Auditoría Clínica y Comparativa Algorítmica")
