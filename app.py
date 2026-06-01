@@ -7,17 +7,15 @@ import os
 import pickle
 import matplotlib.pyplot as plt
 import altair as alt
-from sklearn.metrics import roc_curve, auc, confusion_matrix
-from sklearn.calibration import calibration_curve
+from sklearn.metrics import roc_curve, auc
 from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
-from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from motor_algoritmo import procesar_analitica_paciente, calcular_score_bruto, evaluar_perfil_riesgo
 from xgboost import XGBClassifier
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
-st.set_page_config(page_title="Amiloidosis-Score-Jaén", page_icon="🫀", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Protocolo CardioGen Jaén", page_icon="🫀", layout="wide", initial_sidebar_state="collapsed")
 
 # Carga de la memoria (Persistencia del modelo y del umbral)
 ruta_modelo = 'modelo_jaen.pkl'
@@ -29,7 +27,7 @@ if os.path.exists(ruta_modelo):
         st.session_state['imputer_jaen'] = datos['imputer']
         st.session_state['scaler_jaen'] = datos['scaler']
         st.session_state['columnas_jaen'] = datos['columnas']
-        st.session_state['umbral_jaen'] = datos.get('umbral', 0.25) # Si no hay umbral, usa 25% por defecto
+        st.session_state['umbral_jaen'] = datos.get('umbral', 0.25)
 else:
     st.session_state['modelo_entrenado'] = False
     st.session_state['umbral_jaen'] = 0.25
@@ -43,18 +41,42 @@ def limpiar_valor_para_entrenamiento(val):
     try: return float(val_str)
     except: return np.nan
 
-# --- 2. ESTILOS VISUALES ---
+# --- 2. ESTILOS VISUALES PREMIUM ---
 st.markdown("""
 <style>
-    .stApp { background-color: #f7faf8; }
+    /* Fondo general y contenedores */
+    .stApp { background-color: #f8fafc; }
     .block-container { max-width: 1100px !important; padding-top: 2rem !important; }
+    
+    /* Logos y Cabeceras */
     div[data-testid="stImage"] { display: flex; align-items: center; justify-content: center; }
-    div[data-testid="stImage"] img { max-height: 85px !important; width: auto !important; }
-    .stButton>button { background-color: #0b5a32 !important; color: white !important; font-weight: 600 !important; }
-    .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #e2e8f0; }
+    div[data-testid="stImage"] img { max-height: 90px !important; width: auto !important; border-radius: 8px; }
+    h1 { color: #0b5a32 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 800 !important; letter-spacing: -0.5px; }
+    h2, h3 { color: #1e293b !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; }
+    
+    /* Pestañas */
+    .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #e2e8f0; gap: 20px; }
     .stTabs [aria-selected="true"] { color: #0b5a32 !important; border-bottom: 3px solid #0b5a32 !important; font-weight: 700 !important; }
-    h1, h2, h3 { color: #0b5a32 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; }
-    div.row-widget.stRadio > div { flex-direction:row; justify-content: center; background-color: #e2e8f0; padding: 10px; border-radius: 10px; }
+    
+    /* Botones de Acción Mágicos */
+    .stButton>button { 
+        background-color: #0b5a32 !important; 
+        color: white !important; 
+        font-weight: 600 !important; 
+        border-radius: 8px !important;
+        padding: 0.6rem 1.2rem !important;
+        border: none !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        background-color: #084224 !important;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        transform: translateY(-2px);
+    }
+    
+    /* Cajas de métricas */
+    div[data-testid="stMetricValue"] { color: #0b5a32; font-weight: 800; font-size: 2.2rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -63,8 +85,10 @@ header_col1, header_col2 = st.columns([1.2, 6], vertical_alignment="center")
 with header_col1:
     if os.path.exists("huj.png"): st.image("huj.png", use_container_width=True) 
 with header_col2:
-    st.title("Amiloidosis-Score-Jaén")
-    st.markdown("<p style='color: #718096; font-size: 1.1rem; margin-top: -6px;'>Plataforma Digital de Cribado | Unidad de Cardiología</p>", unsafe_allow_html=True)
+    st.title("Protocolo CardioGen Jaén")
+    st.markdown("<p style='color: #64748b; font-size: 1.15rem; margin-top: -10px; font-weight: 500;'>Plataforma Algorítmica de Cribado Institucional</p>", unsafe_allow_html=True)
+
+st.divider()
 
 tab1, tab2, tab3 = st.tabs(["📋 Evaluación Clínica", "🧠 Entrenamiento de Base", "📊 Validación y Calibración"])
 
@@ -72,8 +96,8 @@ tab1, tab2, tab3 = st.tabs(["📋 Evaluación Clínica", "🧠 Entrenamiento de 
 # PESTAÑA 1: EVALUACIÓN EN CONSULTA
 # ==========================================
 with tab1:
-    st.markdown("### 1. Extracción de Datos Clínicos")
-    pdf_subido = st.file_uploader("Subir analítica (PDF)", type=["pdf"], label_visibility="collapsed")
+    st.markdown("### 1. Extracción de Datos Clínicos (Laboratorio)")
+    pdf_subido = st.file_uploader("Subir analítica del SAS (Formato PDF)", type=["pdf"], label_visibility="collapsed")
     parametros_jaen = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Gamma_GT', 'Albumina', 'MCH', 'Magnesio', 'Hb_libre', 'PCR', 'proBNP']
     valores_extraidos = {k: 0.0 for k in parametros_jaen}
     
@@ -95,86 +119,74 @@ with tab1:
             for k, p in patrones.items():
                 m = re.search(rf"(?:{p})[^\dA-Za-z]*(\d+[.,]\d+|\d+)", texto_completo, re.IGNORECASE)
                 if m: valores_extraidos[k] = float(m.group(1).replace(',', '.'))
-            st.success("✅ Extracción digital completada.")
+            st.success("✅ Extracción digital completada con éxito.")
         except Exception as e: st.error(f"Error procesando PDF: {e}")
 
-    with st.expander("🛠️ Revisión Manual de Valores", expanded=True):
-        st.caption("Si un valor es 0.0, el algoritmo asumirá que no se realizó la prueba e imputará el valor medio del hospital.")
+    with st.expander("🛠️ Revisión Manual de Valores Extraídos", expanded=True):
+        st.info("Los valores en `0.0` indican ausencia de dato en la analítica. El sistema los imputará automáticamente basándose en la mediana del centro.")
         cols = st.columns(2)
         for i, (k, v) in enumerate(valores_extraidos.items()):
             valores_extraidos[k] = cols[i % 2].number_input(k, value=float(v))
     
-    st.markdown("### 2. Motor Predictivo")
-    tipo_modelo = st.radio("Protocolo de Estratificación:", ["Score Local: CardioGen Jaén", "Score Base: Estudio Austríaco"])
+    st.write("")
+    st.markdown("### 2. Motor Predictivo Multivariante")
     
-    if st.button("🧬 Ejecutar Algoritmo", use_container_width=True):
-        if tipo_modelo == "Score Base: Estudio Austríaco":
-            resultado = procesar_analitica_paciente(valores_extraidos)
-            if resultado['estado'] == "ERROR": st.error(resultado['mensaje'])
-            else:
-                score = calcular_score_bruto(resultado['datos_procesados'])
-                alertas = evaluar_perfil_riesgo(resultado['datos_procesados'])
-                col1, col2 = st.columns([1, 2])
-                col1.metric("Score Bruto", score)
-                with col2:
-                    if alertas:
-                        for alerta in alertas: st.warning(alerta)
-                    else: st.success("Bajo Riesgo Clínico")
+    # Hemos eliminado el botón de radio. Solo existe la evaluación directa.
+    if st.button("🧬 Ejecutar Protocolo de Estratificación", use_container_width=True):
+        if not st.session_state['modelo_entrenado']:
+            st.error("⚠️ El Score Institucional no está configurado. Por favor, realiza la calibración inicial en la Pestaña 2.")
         else:
-            if not st.session_state['modelo_entrenado']:
-                st.error("⚠️ El Score Local no está configurado. Entrena el modelo en la Pestaña 2.")
-            else:
-                # PREPARACIÓN INTELIGENTE DE DATOS (Solución al problema de los Ceros)
-                datos_paciente = []
-                for col in st.session_state['columnas_jaen']:
-                    val = valores_extraidos.get(col, 0.0)
-                    datos_paciente.append(np.nan if val == 0.0 else val) # Si es 0, lo vaciamos para que el imputer trabaje
-                
-                # PIPELINE
-                X_paciente = np.array(datos_paciente).reshape(1, -1)
-                X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
-                X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
-                
-                probabilidad = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
-                umbral_clinico = st.session_state['umbral_jaen']
-                
-                # RESULTADOS CON SEMÁFORO DINÁMICO
-                st.markdown("---")
-                col_res1, col_res2 = st.columns([1, 2])
-                col_res1.metric("Probabilidad Calculada", f"{probabilidad:.1%}")
-                
-                with col_res2:
-                    if probabilidad >= umbral_clinico:
-                        st.error(f"🚨 **Riesgo Significativo.** Supera el umbral de seguridad local ({umbral_clinico:.1%}). Se recomienda valoración específica.")
-                        riesgo_texto = "ALTO"
-                    else:
-                        st.success(f"🟢 **Bajo Riesgo.** Por debajo del umbral de alarma ({umbral_clinico:.1%}).")
-                        riesgo_texto = "BAJO"
-                
-                # INFORME PARA HISTORIA CLÍNICA
-                st.write("")
-                with st.expander("📝 Copiar Informe para Historia Clínica (Diraya)"):
-                    informe = (
-                        "========================================================\n"
-                        "INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN\n"
-                        "========================================================\n\n"
-                        "RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):\n"
-                        f"- Probabilidad predictiva del algoritmo: {probabilidad:.1%}\n"
-                        f"- Punto de corte de seguridad (institucional): {umbral_clinico:.1%}\n"
-                        f"- CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}\n\n"
-                        "PERFIL DE BIOMARCADORES DESTACADOS:\n"
-                        f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
-                        f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n"
-                        f"- Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL\n\n"
-                        "* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando\n"
-                        "la firma bioquímica completa de 10 parámetros de rutina.\n"
-                        "Los valores no disponibles en la analítica primaria han sido\n"
-                        "estimados de forma automatizada mediante imputación estadística\n"
-                        "(mediana poblacional de la cohorte local) para asegurar la\n"
-                        "validez predictiva del modelo.\n"
-                        "========================================================"
-                    )
-                    st.code(informe, language="text")
+            # PREPARACIÓN INTELIGENTE DE DATOS
+            datos_paciente = []
+            for col in st.session_state['columnas_jaen']:
+                val = valores_extraidos.get(col, 0.0)
+                datos_paciente.append(np.nan if val == 0.0 else val)
+            
+            # PIPELINE DE MACHINE LEARNING
+            X_paciente = np.array(datos_paciente).reshape(1, -1)
+            X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
+            X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
+            
+            probabilidad = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
+            umbral_clinico = st.session_state['umbral_jaen']
+            
+            # RESULTADOS Y SEMÁFORO
+            st.markdown("---")
+            col_res1, col_res2 = st.columns([1, 2])
+            col_res1.metric("Probabilidad Predictiva", f"{probabilidad:.1%}")
+            
+            with col_res2:
+                if probabilidad >= umbral_clinico:
+                    st.error(f"🚨 **Riesgo Clínico Significativo.** El perfil bioquímico supera el umbral de seguridad local fijado en {umbral_clinico:.1%}. Se recomienda derivación para valoración específica de Amiloidosis.")
+                    riesgo_texto = "ALTO RIESGO"
+                else:
+                    st.success(f"🟢 **Bajo Riesgo Clínico.** La firma predictiva se mantiene por debajo del umbral de alarma institucional ({umbral_clinico:.1%}).")
+                    riesgo_texto = "BAJO RIESGO"
+            
+            # INFORME PARA HISTORIA CLÍNICA (DIRAYA)
+            st.write("")
+            with st.expander("📝 Copiar Informe para Historia Clínica (Diraya)"):
+                informe = (
+                    "========================================================\n"
+                    "INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN\n"
+                    "========================================================\n\n"
+                    "RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):\n"
+                    f"- Probabilidad predictiva del algoritmo: {probabilidad:.1%}\n"
+                    f"- Punto de corte de seguridad (institucional): {umbral_clinico:.1%}\n"
+                    f"- CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}\n\n"
+                    "PERFIL DE BIOMARCADORES DESTACADOS:\n"
+                    f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
+                    f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n"
+                    f"- Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL\n\n"
+                    "* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando\n"
+                    "la firma bioquímica completa de 10 parámetros de rutina.\n"
+                    "Los valores no disponibles en la analítica primaria han sido\n"
+                    "estimados de forma automatizada mediante imputación estadística\n"
+                    "(mediana poblacional de la cohorte local) para asegurar la\n"
+                    "validez predictiva del modelo.\n"
+                    "========================================================"
+                )
+                st.code(informe, language="text")
 
 # ==========================================
 # PESTAÑA 2 Y 3: ENTRENAMIENTO Y AUDITORÍA
@@ -197,16 +209,16 @@ def preparar_datos_csv():
             y = df_limpio['Diagnóstico final']
             return X, y, columnas_finales
         except Exception as e:
-            st.error(f"Error procesando el Excel. Detalle: {e}")
+            st.error(f"Error procesando el Excel. Asegúrese de que existe la columna 'Diagnóstico final'. Detalle: {e}")
             return None, None, None
     return None, None, None
 
 with tab2:
-    st.markdown("### 🧠 Calibración del Modelo Lineal (Regresión Logística)")
-    st.info("Entrena el modelo base y extrae los coeficientes matemáticos exactos para la documentación clínica.")
+    st.markdown("### 🧠 Calibración del Motor Predictivo")
+    st.info("Módulo restringido para actualización de la matriz de pesos del modelo local mediante Regresión Logística.")
     X, y, cols_finales = preparar_datos_csv()
     
-    if X is not None and st.button("🚀 Iniciar Calibración", use_container_width=True):
+    if X is not None and st.button("🚀 Iniciar Calibración Institucional", use_container_width=True):
         imputer = SimpleImputer(strategy='median')
         X_imp = imputer.fit_transform(X)
         scaler = StandardScaler()
@@ -221,10 +233,9 @@ with tab2:
             pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': cols_finales, 'umbral': umbral_actual}, archivo)
             
         st.session_state.update({'modelo_entrenado': True, 'clf_jaen': clf, 'imputer_jaen': imputer, 'scaler_jaen': scaler, 'columnas_jaen': cols_finales})
-        st.success("✅ Motor lineal calibrado y guardado en el servidor.")
+        st.success("✅ Motor predictivo calibrado y matriz de pesos guardada en el servidor central.")
         
-        st.markdown("#### 📐 Coeficientes Matemáticos Exactos")
-        st.markdown("Copia estos valores para tu documento de validación. Un valor negativo indica que la disminución del parámetro suma riesgo; un valor positivo indica que el aumento suma riesgo.")
+        st.markdown("#### 📐 Extracción de Coeficientes Matemáticos")
         
         # Extracción exacta de coeficientes
         df_coef = pd.DataFrame({
@@ -232,62 +243,56 @@ with tab2:
             'Coeficiente (Peso)': clf.coef_[0]
         })
         
-        # Gráfico vectorial interactivo y auto-ajustable
+        # Gráfico vectorial interactivo (Altair)
         grafico = alt.Chart(df_coef).mark_bar().encode(
-            x=alt.X('Coeficiente (Peso):Q', title='Peso del Biomarcador (Regresión Logística)'),
-            y=alt.Y('Biomarcador:N', sort='x', title=''), # Ordenado de menor a mayor
+            x=alt.X('Coeficiente (Peso):Q', title='Peso Predictivo (Regresión Logística)'),
+            y=alt.Y('Biomarcador:N', sort='x', title=''), 
             color=alt.condition(
                 alt.datum['Coeficiente (Peso)'] > 0,
-                alt.value('#0b5a32'),  # Verde para factores de riesgo por exceso
-                alt.value('#c0392b')   # Rojo para factores de riesgo por defecto
+                alt.value('#0b5a32'),  
+                alt.value('#c0392b')   
             ),
             tooltip=['Biomarcador', 'Coeficiente (Peso)']
         ).properties(
-            title='Impacto de cada variable en el Score CardioGen Jaén',
+            title='Impacto Paramétrico en el Riesgo Clínico',
             height=450
         ).interactive()
 
         st.altair_chart(grafico, use_container_width=True)
         
-        # Tabla estática limpia por si los médicos quieren el número exacto
-        with st.expander("Ver tabla numérica detallada"):
+        with st.expander("Ver Matriz Numérica Detallada"):
             st.dataframe(df_coef.sort_values('Coeficiente (Peso)', ascending=False), use_container_width=True)
 
 with tab3:
-    st.markdown("### 📊 Auditoría Clínica y Comparativa Algorítmica")
-    st.info("Módulo de validación interna mediante partición aleatoria (Hold-out 75/25). Evalúa el rendimiento diagnóstico de la Regresión Logística Multivariante frente a modelos de aprendizaje automático no lineal (Gradient Tree Boosting) para optimizar el punto de corte institucional.")
+    st.markdown("### 📊 Auditoría Clínica y Optimización de Umbral")
+    st.info("Módulo de validación interna (Hold-out 75/25). Calcula el Área Bajo la Curva (AUC) y determina el Índice de Youden para maximizar la sensibilidad diagnóstica.")
     
     if X is not None:
-        if st.button("Generar Informe Comparativo y Actualizar Umbral", use_container_width=True):
-            # Split de datos
+        if st.button("Generar Informe de Auditoría y Actualizar Umbral", use_container_width=True):
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
             
-            # Preprocesamiento
             imp_val = SimpleImputer(strategy='median')
             sca_val = StandardScaler()
             X_train_sca = sca_val.fit_transform(imp_val.fit_transform(X_train))
             X_test_sca = sca_val.transform(imp_val.transform(X_test))
             
-            # --- MODELO 1: LINEAL (LogReg) ---
+            # MODELO 1: LINEAL 
             clf_lr = LogisticRegression(max_iter=2000, class_weight='balanced')
             clf_lr.fit(X_train_sca, y_train)
             y_pred_prob_lr = clf_lr.predict_proba(X_test_sca)[:, 1]
             fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_test, y_pred_prob_lr)
             auc_lr = auc(fpr_lr, tpr_lr)
             
-            # Umbral LogReg
             youden_idx = np.argmax(tpr_lr - fpr_lr)
             nuevo_umbral = thresholds_lr[youden_idx]
             
-            # Actualizamos el umbral en la app
             if st.session_state['modelo_entrenado']:
                 with open(ruta_modelo, 'rb') as archivo: d = pickle.load(archivo)
                 d['umbral'] = nuevo_umbral
                 with open(ruta_modelo, 'wb') as archivo: pickle.dump(d, archivo)
                 st.session_state['umbral_jaen'] = nuevo_umbral
             
-            # --- MODELO 2: NO LINEAL (XGBoost) ---
-            # Configuramos XGBoost para manejar el desbalanceo y los datos
+            # MODELO 2: NO LINEAL (XGBoost)
             scale_pos_weight = (len(y_train) - sum(y_train)) / sum(y_train) if sum(y_train) > 0 else 1
             clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
             clf_xgb.fit(X_train_sca, y_train)
@@ -295,24 +300,20 @@ with tab3:
             fpr_xgb, tpr_xgb, _ = roc_curve(y_test, y_pred_prob_xgb)
             auc_xgb = auc(fpr_xgb, tpr_xgb)
 
-            # --- RENDERIZADO DEL INFORME ---
-            st.success(f"💾 Punto de Corte Clínico (Regresión Logística) fijado en: {nuevo_umbral*100:.1f}%")
+            st.success(f"🎯 Punto de Corte Institucional fijado matemáticamente en: {nuevo_umbral*100:.1f}%")
             
             col_m1, col_m2 = st.columns(2)
-            col_m1.metric("AUC (Modelo Lineal)", f"{auc_lr:.3f}")
-            col_m2.metric("AUC (Modelo XGBoost)", f"{auc_xgb:.3f}")
+            col_m1.metric("Poder Predictivo Lineal (AUC)", f"{auc_lr:.3f}")
+            col_m2.metric("Poder Predictivo XGBoost (AUC)", f"{auc_xgb:.3f}")
             
-            # --- GRÁFICA COMPARATIVA ROC VECTORIAL (ALTAIR CON TAMAÑO FORZADO) ---
             st.markdown("#### 📈 Curvas ROC Comparativas")
             
-            # Preparar datos para Altair
             df_lr = pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Lineal (AUC = {auc_lr:.3f})'})
             df_xgb = pd.DataFrame({'FPR': fpr_xgb, 'TPR': tpr_xgb, 'Modelo': f'XGBoost (AUC = {auc_xgb:.3f})'})
             df_ref = pd.DataFrame({'FPR': [0, 1], 'TPR': [0, 1], 'Modelo': 'Referencia Aleatoria'})
             
             df_roc = pd.concat([df_lr, df_xgb, df_ref])
             
-            # Generar gráfico forzando el tamaño explícitamente para evitar el bug de las pestañas
             roc_chart = alt.Chart(df_roc).mark_line(size=3).encode(
                 x=alt.X('FPR:Q', title='Tasa de Falsos Positivos (1 - Especificidad)'),
                 y=alt.Y('TPR:Q', title='Tasa de Verdaderos Positivos (Sensibilidad)'),
@@ -322,8 +323,8 @@ with tab3:
                 ), legend=alt.Legend(title="Algoritmo Predictivo", orient='bottom-right')),
                 strokeDash=alt.condition(
                     alt.datum.Modelo == 'Referencia Aleatoria',
-                    alt.value([5, 5]),  # Línea de puntos para la referencia
-                    alt.value([0])      # Líneas continuas para los modelos
+                    alt.value([5, 5]),  
+                    alt.value([0])      
                 ),
                 tooltip=[
                     alt.Tooltip('Modelo:N', title='Modelo'), 
@@ -331,12 +332,11 @@ with tab3:
                     alt.Tooltip('TPR:Q', title='TPR', format='.3f')
                 ]
             ).properties(
-                width=900,  # <-- FORZAMOS ANCHO
-                height=550  # <-- FORZAMOS ALTO
+                width=900, 
+                height=550 
             ).interactive()
             
-            # use_container_width=False es clave aquí para que no vuelva a encogerse
             st.altair_chart(roc_chart, use_container_width=False) 
             
     else:
-        st.warning("Carga el archivo Excel arriba para realizar la auditoría.")
+        st.warning("Carga el archivo de calibración histórico para iniciar la auditoría.")
