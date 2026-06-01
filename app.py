@@ -53,7 +53,7 @@ st.markdown("""
     div[data-testid="stImage"] img { 
         max-height: 90px !important; 
         width: auto !important; 
-        border-radius: 0px !important; /* FORZAMOS ESQUINAS RECTAS */
+        border-radius: 0px !important; 
         box-shadow: none !important;
     }
     h1 { color: #0b5a32 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 800 !important; letter-spacing: -0.5px; }
@@ -133,7 +133,7 @@ with tab1:
         except Exception as e: st.error(f"Error procesando documento PDF: {e}")
 
     with st.expander("REVISIÓN MANUAL DE VALORES EXTRAÍDOS", expanded=True):
-        st.info("Nota del sistema: Los valores en '0.0' indican ausencia de dato en la analítica primaria. El modelo aplicará imputación estadística automatizada (mediana poblacional del centro).")
+        st.info("Nota del sistema: Los valores en '0.0' indican ausencia de dato en la analítica primaria. El modelo aplicará imputación estadística automatizada (máximo 2 variables permitidas).")
         cols = st.columns(2)
         for i, (k, v) in enumerate(valores_extraidos.items()):
             valores_extraidos[k] = cols[i % 2].number_input(k, value=float(v))
@@ -145,57 +145,62 @@ with tab1:
         if not st.session_state['modelo_entrenado']:
             st.error("Error: El Score Institucional no está configurado. Por favor, realice la calibración inicial de la matriz en la pestaña correspondiente.")
         else:
-            # PREPARACIÓN INTELIGENTE DE DATOS
-            datos_paciente = []
-            for col in st.session_state['columnas_jaen']:
-                val = valores_extraidos.get(col, 0.0)
-                datos_paciente.append(np.nan if val == 0.0 else val)
+            # --- NUEVA BARRERA DE SEGURIDAD CLÍNICA ---
+            # Contamos cuántos parámetros están a 0.0 (es decir, faltan en la analítica)
+            parametros_ausentes = sum(1 for v in valores_extraidos.values() if v == 0.0)
             
-            # PIPELINE DE MACHINE LEARNING
-            X_paciente = np.array(datos_paciente).reshape(1, -1)
-            X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
-            X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
-            
-            probabilidad = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
-            umbral_clinico = st.session_state['umbral_jaen']
-            
-            # RESULTADOS Y ESTRATIFICACIÓN
-            st.markdown("---")
-            col_res1, col_res2 = st.columns([1, 2])
-            col_res1.metric("Probabilidad Predictiva", f"{probabilidad:.1%}")
-            
-            with col_res2:
-                if probabilidad >= umbral_clinico:
-                    st.error(f"ATENCIÓN CLÍNICA: RIESGO SIGNIFICATIVO. El perfil bioquímico supera el umbral de seguridad local fijado en {umbral_clinico:.1%}. Se recomienda derivación para valoración específica de Amiloidosis.")
-                    riesgo_texto = "ALTO RIESGO"
-                else:
-                    st.success(f"VALORACIÓN: BAJO RIESGO CLÍNICO. La firma predictiva se mantiene por debajo del umbral de alarma institucional ({umbral_clinico:.1%}).")
-                    riesgo_texto = "BAJO RIESGO"
-            
-            # INFORME PARA HISTORIA CLÍNICA (DIRAYA)
-            st.write("")
-            with st.expander("GENERAR INFORME PARA HISTORIA CLÍNICA (DIRAYA)"):
-                informe = (
-                    "========================================================\n"
-                    "INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN\n"
-                    "========================================================\n\n"
-                    "RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):\n"
-                    f"- Probabilidad predictiva del algoritmo: {probabilidad:.1%}\n"
-                    f"- Punto de corte de seguridad (institucional): {umbral_clinico:.1%}\n"
-                    f"- CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}\n\n"
-                    "PERFIL DE BIOMARCADORES DESTACADOS:\n"
-                    f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
-                    f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n"
-                    f"- Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL\n\n"
-                    "* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando\n"
-                    "la firma bioquímica completa de 10 parámetros de rutina.\n"
-                    "Los valores no disponibles en la analítica primaria han sido\n"
-                    "estimados de forma automatizada mediante imputación estadística\n"
-                    "(mediana poblacional de la cohorte local) para asegurar la\n"
-                    "validez predictiva del modelo.\n"
-                    "========================================================"
-                )
-                st.code(informe, language="text")
+            if parametros_ausentes > 2:
+                st.error(f"⚠️ BLOQUEO DE SEGURIDAD CLÍNICA: Se han detectado {parametros_ausentes} parámetros ausentes. El protocolo exige un mínimo de 8 biomarcadores válidos sobre 10 para garantizar la precisión diagnóstica. Por favor, solicite una analítica más completa o revise la extracción manual.")
+            else:
+                # PREPARACIÓN INTELIGENTE DE DATOS
+                datos_paciente = []
+                for col in st.session_state['columnas_jaen']:
+                    val = valores_extraidos.get(col, 0.0)
+                    datos_paciente.append(np.nan if val == 0.0 else val)
+                
+                # PIPELINE DE MACHINE LEARNING
+                X_paciente = np.array(datos_paciente).reshape(1, -1)
+                X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
+                X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
+                
+                probabilidad = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
+                umbral_clinico = st.session_state['umbral_jaen']
+                
+                # RESULTADOS Y ESTRATIFICACIÓN
+                st.markdown("---")
+                col_res1, col_res2 = st.columns([1, 2])
+                col_res1.metric("Probabilidad Predictiva", f"{probabilidad:.1%}")
+                
+                with col_res2:
+                    if probabilidad >= umbral_clinico:
+                        st.error(f"ATENCIÓN CLÍNICA: RIESGO SIGNIFICATIVO. El perfil bioquímico supera el umbral de seguridad local fijado en {umbral_clinico:.1%}. Se recomienda derivación para valoración específica de Amiloidosis.")
+                        riesgo_texto = "ALTO RIESGO"
+                    else:
+                        st.success(f"VALORACIÓN: BAJO RIESGO CLÍNICO. La firma predictiva se mantiene por debajo del umbral de alarma institucional ({umbral_clinico:.1%}).")
+                        riesgo_texto = "BAJO RIESGO"
+                
+                # INFORME PARA HISTORIA CLÍNICA (DIRAYA)
+                st.write("")
+                with st.expander("GENERAR INFORME PARA HISTORIA CLÍNICA (DIRAYA)"):
+                    informe = (
+                        "========================================================\n"
+                        "INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN\n"
+                        "========================================================\n\n"
+                        "RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):\n"
+                        f"- Probabilidad predictiva del algoritmo: {probabilidad:.1%}\n"
+                        f"- Punto de corte de seguridad (institucional): {umbral_clinico:.1%}\n"
+                        f"- CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}\n\n"
+                        "PERFIL DE BIOMARCADORES DESTACADOS:\n"
+                        f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
+                        f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n"
+                        f"- Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL\n\n"
+                        "* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando\n"
+                        "la firma bioquímica completa de 10 parámetros de rutina.\n"
+                        f"Se ha aplicado imputación estadística automatizada sobre {parametros_ausentes} valores\n"
+                        "ausentes en la analítica primaria (límite de seguridad: 2).\n"
+                        "========================================================"
+                    )
+                    st.code(informe, language="text")
 
 # ==========================================
 # PESTAÑA 2 Y 3: ENTRENAMIENTO Y AUDITORÍA
