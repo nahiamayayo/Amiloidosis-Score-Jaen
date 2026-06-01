@@ -5,7 +5,6 @@ import re
 import pdfplumber
 import os
 import pickle
-import matplotlib.subplots as plt_sub # Importado correctamente internamente abajo
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_curve, auc, confusion_matrix
 from sklearn.calibration import calibration_curve
