@@ -6,6 +6,7 @@ import pdfplumber
 import os
 import pickle
 import matplotlib.pyplot as plt
+import altair as alt
 from sklearn.metrics import roc_curve, auc, confusion_matrix
 from sklearn.calibration import calibration_curve
 from sklearn.linear_model import LogisticRegression
@@ -223,30 +224,34 @@ with tab2:
         st.success("✅ Motor lineal calibrado y guardado en el servidor.")
         
         st.markdown("#### 📐 Coeficientes Matemáticos Exactos")
-        st.markdown("Copia estos valores para tu documento de validación. Un valor negativo indica que la disminución del parámetro suma riesgo (ej. Glucosa); un valor positivo indica que el aumento suma riesgo.")
+        st.markdown("Copia estos valores para tu documento de validación. Un valor negativo indica que la disminución del parámetro suma riesgo; un valor positivo indica que el aumento suma riesgo.")
         
-        # Extracción exacta de coeficientes y Gráfico Visual
+        # Extracción exacta de coeficientes
         df_coef = pd.DataFrame({
             'Biomarcador': cols_finales,
             'Coeficiente (Peso)': clf.coef_[0]
-        }).sort_values('Coeficiente (Peso)', ascending=True) # Ascendente para el gráfico
+        })
         
-        fig_coef, ax_coef = plt.subplots(figsize=(10, 6))
-        # Colores: Rojo si el valor negativo suma riesgo, Verde si el positivo suma riesgo
-        colores = ['#c0392b' if x < 0 else '#0b5a32' for x in df_coef['Coeficiente (Peso)']]
-        
-        ax_coef.barh(df_coef['Biomarcador'], df_coef['Coeficiente (Peso)'], color=colores, height=0.6)
-        ax_coef.set_xlabel('Peso del Biomarcador (Coeficiente de Regresión Logística)')
-        ax_coef.set_title('Impacto de cada variable en el Score CardioGen Jaén')
-        ax_coef.grid(axis='x', linestyle='--', alpha=0.7)
-        ax_coef.axvline(x=0, color='black', linewidth=1)
-        
-        plt.tight_layout()
-        st.pyplot(fig_coef)
+        # Gráfico vectorial interactivo y auto-ajustable
+        grafico = alt.Chart(df_coef).mark_bar().encode(
+            x=alt.X('Coeficiente (Peso):Q', title='Peso del Biomarcador (Regresión Logística)'),
+            y=alt.Y('Biomarcador:N', sort='x', title=''), # Ordenado de menor a mayor
+            color=alt.condition(
+                alt.datum['Coeficiente (Peso)'] > 0,
+                alt.value('#0b5a32'),  # Verde para factores de riesgo por exceso
+                alt.value('#c0392b')   # Rojo para factores de riesgo por defecto
+            ),
+            tooltip=['Biomarcador', 'Coeficiente (Peso)']
+        ).properties(
+            title='Impacto de cada variable en el Score CardioGen Jaén',
+            height=450 # Altura forzada para que las barras sean gruesas y legibles
+        ).interactive()
+
+        st.altair_chart(grafico, use_container_width=True)
         
         # Tabla estática limpia por si los médicos quieren el número exacto
         with st.expander("Ver tabla numérica detallada"):
-            st.table(df_coef.sort_values('Coeficiente (Peso)', ascending=False).style.format({"Coeficiente (Peso)": "{:.4f}"}))
+            st.dataframe(df_coef.sort_values('Coeficiente (Peso)', ascending=False), use_container_width=True)
 
 with tab3:
     st.markdown("### 📊 Auditoría Clínica y Comparativa Algorítmica")
