@@ -178,8 +178,7 @@ Los valores no disponibles en la analítica primaria han sido
 estimados de forma automatizada mediante imputación estadística 
 (mediana poblacional de la cohorte local) para asegurar la 
 validez predictiva del modelo.
-========================================================
-""", language="text")
+========================================================""", language="text")
 
 # ==========================================
 # PESTAÑA 2 Y 3: ENTRENAMIENTO Y AUDITORÍA
