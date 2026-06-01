@@ -15,7 +15,7 @@ from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
-st.set_page_config(page_title="Protocolo CardioGen Jaén", page_icon="🫀", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Protocolo CardioGen Jaén", page_icon="⚕️", layout="wide", initial_sidebar_state="collapsed")
 
 # Carga de la memoria (Persistencia del modelo y del umbral)
 ruta_modelo = 'modelo_jaen.pkl'
@@ -50,9 +50,9 @@ st.markdown("""
     
     /* Logos y Cabeceras */
     div[data-testid="stImage"] { display: flex; align-items: center; justify-content: center; }
-    div[data-testid="stImage"] img { max-height: 90px !important; width: auto !important; border-radius: 8px; }
+    div[data-testid="stImage"] img { max-height: 90px !important; width: auto !important; }
     h1 { color: #0b5a32 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 800 !important; letter-spacing: -0.5px; }
-    h2, h3 { color: #1e293b !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; }
+    h2, h3, h4 { color: #1e293b !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; }
     
     /* Pestañas */
     .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #e2e8f0; gap: 20px; }
@@ -63,20 +63,25 @@ st.markdown("""
         background-color: #0b5a32 !important; 
         color: white !important; 
         font-weight: 600 !important; 
-        border-radius: 8px !important;
+        border-radius: 4px !important;
         padding: 0.6rem 1.2rem !important;
         border: none !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
     }
     .stButton>button:hover {
         background-color: #084224 !important;
-        box-shadow: 0 6px 12px rgba(0,0,0,0.15);
-        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        transform: translateY(-1px);
     }
     
     /* Cajas de métricas */
     div[data-testid="stMetricValue"] { color: #0b5a32; font-weight: 800; font-size: 2.2rem;}
+    
+    /* Expanders */
+    .streamlit-expanderHeader { font-weight: 600 !important; color: #334155 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -85,18 +90,18 @@ header_col1, header_col2 = st.columns([1.2, 6], vertical_alignment="center")
 with header_col1:
     if os.path.exists("huj.png"): st.image("huj.png", use_container_width=True) 
 with header_col2:
-    st.title("Protocolo CardioGen Jaén")
-    st.markdown("<p style='color: #64748b; font-size: 1.15rem; margin-top: -10px; font-weight: 500;'>Plataforma Algorítmica de Cribado Institucional</p>", unsafe_allow_html=True)
+    st.title("PROTOCOLO CARDIOGEN JAÉN")
+    st.markdown("<p style='color: #64748b; font-size: 1.15rem; margin-top: -10px; font-weight: 500;'>PLATAFORMA ALGORÍTMICA DE CRIBADO INSTITUCIONAL</p>", unsafe_allow_html=True)
 
 st.divider()
 
-tab1, tab2, tab3 = st.tabs(["📋 Evaluación Clínica", "🧠 Entrenamiento de Base", "📊 Validación y Calibración"])
+tab1, tab2, tab3 = st.tabs(["EVALUACIÓN CLÍNICA", "CALIBRACIÓN DEL MOTOR", "AUDITORÍA E INFORMES"])
 
 # ==========================================
 # PESTAÑA 1: EVALUACIÓN EN CONSULTA
 # ==========================================
 with tab1:
-    st.markdown("### 1. Extracción de Datos Clínicos (Laboratorio)")
+    st.markdown("### 1. EXTRACCIÓN DE DATOS CLÍNICOS (LABORATORIO)")
     pdf_subido = st.file_uploader("Subir analítica del SAS (Formato PDF)", type=["pdf"], label_visibility="collapsed")
     parametros_jaen = ['Glucosa', 'Trigliceridos', 'Colesterol', 'Gamma_GT', 'Albumina', 'MCH', 'Magnesio', 'Hb_libre', 'PCR', 'proBNP']
     valores_extraidos = {k: 0.0 for k in parametros_jaen}
@@ -119,22 +124,21 @@ with tab1:
             for k, p in patrones.items():
                 m = re.search(rf"(?:{p})[^\dA-Za-z]*(\d+[.,]\d+|\d+)", texto_completo, re.IGNORECASE)
                 if m: valores_extraidos[k] = float(m.group(1).replace(',', '.'))
-            st.success("✅ Extracción digital completada con éxito.")
-        except Exception as e: st.error(f"Error procesando PDF: {e}")
+            st.success("Extracción digital completada con éxito.")
+        except Exception as e: st.error(f"Error procesando documento PDF: {e}")
 
-    with st.expander("🛠️ Revisión Manual de Valores Extraídos", expanded=True):
-        st.info("Los valores en `0.0` indican ausencia de dato en la analítica. El sistema los imputará automáticamente basándose en la mediana del centro.")
+    with st.expander("REVISIÓN MANUAL DE VALORES EXTRAÍDOS", expanded=True):
+        st.info("Nota del sistema: Los valores en '0.0' indican ausencia de dato en la analítica primaria. El modelo aplicará imputación estadística automatizada (mediana poblacional del centro).")
         cols = st.columns(2)
         for i, (k, v) in enumerate(valores_extraidos.items()):
             valores_extraidos[k] = cols[i % 2].number_input(k, value=float(v))
     
     st.write("")
-    st.markdown("### 2. Motor Predictivo Multivariante")
+    st.markdown("### 2. MOTOR PREDICTIVO MULTIVARIANTE")
     
-    # Hemos eliminado el botón de radio. Solo existe la evaluación directa.
-    if st.button("🧬 Ejecutar Protocolo de Estratificación", use_container_width=True):
+    if st.button("EJECUTAR PROTOCOLO DE ESTRATIFICACIÓN", use_container_width=True):
         if not st.session_state['modelo_entrenado']:
-            st.error("⚠️ El Score Institucional no está configurado. Por favor, realiza la calibración inicial en la Pestaña 2.")
+            st.error("Error: El Score Institucional no está configurado. Por favor, realice la calibración inicial de la matriz en la pestaña correspondiente.")
         else:
             # PREPARACIÓN INTELIGENTE DE DATOS
             datos_paciente = []
@@ -150,22 +154,22 @@ with tab1:
             probabilidad = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
             umbral_clinico = st.session_state['umbral_jaen']
             
-            # RESULTADOS Y SEMÁFORO
+            # RESULTADOS Y ESTRATIFICACIÓN
             st.markdown("---")
             col_res1, col_res2 = st.columns([1, 2])
             col_res1.metric("Probabilidad Predictiva", f"{probabilidad:.1%}")
             
             with col_res2:
                 if probabilidad >= umbral_clinico:
-                    st.error(f"🚨 **Riesgo Clínico Significativo.** El perfil bioquímico supera el umbral de seguridad local fijado en {umbral_clinico:.1%}. Se recomienda derivación para valoración específica de Amiloidosis.")
+                    st.error(f"ATENCIÓN CLÍNICA: RIESGO SIGNIFICATIVO. El perfil bioquímico supera el umbral de seguridad local fijado en {umbral_clinico:.1%}. Se recomienda derivación para valoración específica de Amiloidosis.")
                     riesgo_texto = "ALTO RIESGO"
                 else:
-                    st.success(f"🟢 **Bajo Riesgo Clínico.** La firma predictiva se mantiene por debajo del umbral de alarma institucional ({umbral_clinico:.1%}).")
+                    st.success(f"VALORACIÓN: BAJO RIESGO CLÍNICO. La firma predictiva se mantiene por debajo del umbral de alarma institucional ({umbral_clinico:.1%}).")
                     riesgo_texto = "BAJO RIESGO"
             
             # INFORME PARA HISTORIA CLÍNICA (DIRAYA)
             st.write("")
-            with st.expander("📝 Copiar Informe para Historia Clínica (Diraya)"):
+            with st.expander("GENERAR INFORME PARA HISTORIA CLÍNICA (DIRAYA)"):
                 informe = (
                     "========================================================\n"
                     "INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN\n"
@@ -209,16 +213,16 @@ def preparar_datos_csv():
             y = df_limpio['Diagnóstico final']
             return X, y, columnas_finales
         except Exception as e:
-            st.error(f"Error procesando el Excel. Asegúrese de que existe la columna 'Diagnóstico final'. Detalle: {e}")
+            st.error(f"Error procesando el archivo histórico. Asegúrese de que existe la columna 'Diagnóstico final'. Detalle: {e}")
             return None, None, None
     return None, None, None
 
 with tab2:
-    st.markdown("### 🧠 Calibración del Motor Predictivo")
-    st.info("Módulo restringido para actualización de la matriz de pesos del modelo local mediante Regresión Logística.")
+    st.markdown("### CALIBRACIÓN DEL MOTOR PREDICTIVO")
+    st.info("Módulo restringido para actualización de la matriz de pesos del modelo local mediante Regresión Logística Multivariante.")
     X, y, cols_finales = preparar_datos_csv()
     
-    if X is not None and st.button("🚀 Iniciar Calibración Institucional", use_container_width=True):
+    if X is not None and st.button("INICIAR CALIBRACIÓN INSTITUCIONAL", use_container_width=True):
         imputer = SimpleImputer(strategy='median')
         X_imp = imputer.fit_transform(X)
         scaler = StandardScaler()
@@ -233,17 +237,15 @@ with tab2:
             pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': cols_finales, 'umbral': umbral_actual}, archivo)
             
         st.session_state.update({'modelo_entrenado': True, 'clf_jaen': clf, 'imputer_jaen': imputer, 'scaler_jaen': scaler, 'columnas_jaen': cols_finales})
-        st.success("✅ Motor predictivo calibrado y matriz de pesos guardada en el servidor central.")
+        st.success("Operación completada: Motor predictivo calibrado y matriz de pesos guardada en el servidor central.")
         
-        st.markdown("#### 📐 Extracción de Coeficientes Matemáticos")
+        st.markdown("#### EXTRACCIÓN DE COEFICIENTES MATEMÁTICOS")
         
-        # Extracción exacta de coeficientes
         df_coef = pd.DataFrame({
             'Biomarcador': cols_finales,
             'Coeficiente (Peso)': clf.coef_[0]
         })
         
-        # Gráfico vectorial interactivo (Altair)
         grafico = alt.Chart(df_coef).mark_bar().encode(
             x=alt.X('Coeficiente (Peso):Q', title='Peso Predictivo (Regresión Logística)'),
             y=alt.Y('Biomarcador:N', sort='x', title=''), 
@@ -260,15 +262,15 @@ with tab2:
 
         st.altair_chart(grafico, use_container_width=True)
         
-        with st.expander("Ver Matriz Numérica Detallada"):
+        with st.expander("VER MATRIZ NUMÉRICA DETALLADA"):
             st.dataframe(df_coef.sort_values('Coeficiente (Peso)', ascending=False), use_container_width=True)
 
 with tab3:
-    st.markdown("### 📊 Auditoría Clínica y Optimización de Umbral")
+    st.markdown("### AUDITORÍA CLÍNICA Y OPTIMIZACIÓN DE UMBRAL")
     st.info("Módulo de validación interna (Hold-out 75/25). Calcula el Área Bajo la Curva (AUC) y determina el Índice de Youden para maximizar la sensibilidad diagnóstica.")
     
     if X is not None:
-        if st.button("Generar Informe de Auditoría y Actualizar Umbral", use_container_width=True):
+        if st.button("GENERAR INFORME DE AUDITORÍA Y ACTUALIZAR UMBRAL", use_container_width=True):
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
             
             imp_val = SimpleImputer(strategy='median')
@@ -300,13 +302,13 @@ with tab3:
             fpr_xgb, tpr_xgb, _ = roc_curve(y_test, y_pred_prob_xgb)
             auc_xgb = auc(fpr_xgb, tpr_xgb)
 
-            st.success(f"🎯 Punto de Corte Institucional fijado matemáticamente en: {nuevo_umbral*100:.1f}%")
+            st.success(f"Punto de Corte Institucional fijado matemáticamente en: {nuevo_umbral*100:.1f}%")
             
             col_m1, col_m2 = st.columns(2)
             col_m1.metric("Poder Predictivo Lineal (AUC)", f"{auc_lr:.3f}")
             col_m2.metric("Poder Predictivo XGBoost (AUC)", f"{auc_xgb:.3f}")
             
-            st.markdown("#### 📈 Curvas ROC Comparativas")
+            st.markdown("#### CURVAS ROC COMPARATIVAS")
             
             df_lr = pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Lineal (AUC = {auc_lr:.3f})'})
             df_xgb = pd.DataFrame({'FPR': fpr_xgb, 'TPR': tpr_xgb, 'Modelo': f'XGBoost (AUC = {auc_xgb:.3f})'})
