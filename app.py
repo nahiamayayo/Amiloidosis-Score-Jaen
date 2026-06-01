@@ -158,28 +158,26 @@ with tab1:
 # INFORME PARA HISTORIA CLÍNICA
                 st.write("")
                 with st.expander("📝 Copiar Informe para Historia Clínica (Diraya)"):
-                    informe = f"""========================================================
-INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN
-========================================================
-
-RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):
-- Probabilidad predictiva del algoritmo: {probabilidad:.1%}
-- Punto de corte de seguridad (institucional): {umbral_clinico:.1%}
-- CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}
-
-PERFIL DE BIOMARCADORES DESTACADOS:
-- NT-proBNP: {valores_extraidos['proBNP']} pg/mL
-- Albúmina sérica: {valores_extraidos['Albumina']} g/dL
-- Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL
-
-* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando
-la firma bioquímica completa de 10 parámetros de rutina. 
-Los valores no disponibles en la analítica primaria han sido 
-estimados de forma automatizada mediante imputación estadística 
-(mediana poblacional de la cohorte local) para asegurar la 
-validez predictiva del modelo.
-========================================================"""
-                    
+                    informe = (
+                        "========================================================\n"
+                        "INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN\n"
+                        "========================================================\n\n"
+                        "RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):\n"
+                        f"- Probabilidad predictiva del algoritmo: {probabilidad:.1%}\n"
+                        f"- Punto de corte de seguridad (institucional): {umbral_clinico:.1%}\n"
+                        f"- CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}\n\n"
+                        "PERFIL DE BIOMARCADORES DESTACADOS:\n"
+                        f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
+                        f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n"
+                        f"- Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL\n\n"
+                        "* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando\n"
+                        "la firma bioquímica completa de 10 parámetros de rutina.\n"
+                        "Los valores no disponibles en la analítica primaria han sido\n"
+                        "estimados de forma automatizada mediante imputación estadística\n"
+                        "(mediana poblacional de la cohorte local) para asegurar la\n"
+                        "validez predictiva del modelo.\n"
+                        "========================================================"
+                    )
                     st.code(informe, language="text")
 
 # ==========================================
