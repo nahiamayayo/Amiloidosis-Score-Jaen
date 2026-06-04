@@ -7,7 +7,7 @@ import os
 import pickle
 import matplotlib.pyplot as plt
 import altair as alt
-from sklearn.metrics import roc_curve, auc
+from sklearn.metrics import roc_curve, auc, confusion_matrix
 from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
@@ -27,10 +27,10 @@ if os.path.exists(ruta_modelo):
         st.session_state['imputer_jaen'] = datos['imputer']
         st.session_state['scaler_jaen'] = datos['scaler']
         st.session_state['columnas_jaen'] = datos['columnas']
-        st.session_state['umbral_jaen'] = datos.get('umbral', 0.25)
+        st.session_state['umbral_jaen'] = datos.get('umbral', 0.522)
 else:
     st.session_state['modelo_entrenado'] = False
-    st.session_state['umbral_jaen'] = 0.25
+    st.session_state['umbral_jaen'] = 0.522
 
 # Función de limpieza (Robusta para el Excel)
 def limpiar_valor_para_entrenamiento(val):
@@ -145,20 +145,16 @@ with tab1:
         if not st.session_state['modelo_entrenado']:
             st.error("Error: El Score Institucional no está configurado. Por favor, realice la calibración inicial de la matriz en la pestaña correspondiente.")
         else:
-            # --- NUEVA BARRERA DE SEGURIDAD CLÍNICA ---
-            # Contamos cuántos parámetros están a 0.0 (es decir, faltan en la analítica)
             parametros_ausentes = sum(1 for v in valores_extraidos.values() if v == 0.0)
             
             if parametros_ausentes > 2:
                 st.error(f"⚠️ BLOQUEO DE SEGURIDAD CLÍNICA: Se han detectado {parametros_ausentes} parámetros ausentes. El protocolo exige un mínimo de 8 biomarcadores válidos sobre 10 para garantizar la precisión diagnóstica. Por favor, solicite una analítica más completa o revise la extracción manual.")
             else:
-                # PREPARACIÓN INTELIGENTE DE DATOS
                 datos_paciente = []
                 for col in st.session_state['columnas_jaen']:
                     val = valores_extraidos.get(col, 0.0)
                     datos_paciente.append(np.nan if val == 0.0 else val)
                 
-                # PIPELINE DE MACHINE LEARNING
                 X_paciente = np.array(datos_paciente).reshape(1, -1)
                 X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
                 X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
@@ -166,7 +162,6 @@ with tab1:
                 probabilidad = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
                 umbral_clinico = st.session_state['umbral_jaen']
                 
-                # RESULTADOS Y ESTRATIFICACIÓN
                 st.markdown("---")
                 col_res1, col_res2 = st.columns([1, 2])
                 col_res1.metric("Probabilidad Predictiva", f"{probabilidad:.1%}")
@@ -179,7 +174,6 @@ with tab1:
                         st.success(f"VALORACIÓN: BAJO RIESGO CLÍNICO. La firma predictiva se mantiene por debajo del umbral de alarma institucional ({umbral_clinico:.1%}).")
                         riesgo_texto = "BAJO RIESGO"
                 
-                # INFORME PARA HISTORIA CLÍNICA (DIRAYA)
                 st.write("")
                 with st.expander("GENERAR INFORME PARA HISTORIA CLÍNICA (DIRAYA)"):
                     informe = (
@@ -241,7 +235,7 @@ with tab2:
         clf = LogisticRegression(max_iter=2000, class_weight='balanced')
         clf.fit(X_sca, y)
         
-        umbral_actual = st.session_state.get('umbral_jaen', 0.25)
+        umbral_actual = st.session_state.get('umbral_jaen', 0.522)
         
         with open(ruta_modelo, 'wb') as archivo:
             pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': cols_finales, 'umbral': umbral_actual}, archivo)
@@ -250,35 +244,21 @@ with tab2:
         st.success("Operación completada: Motor predictivo calibrado y matriz de pesos guardada en el servidor central.")
         
         st.markdown("#### EXTRACCIÓN DE COEFICIENTES MATEMÁTICOS")
-        
-        df_coef = pd.DataFrame({
-            'Biomarcador': cols_finales,
-            'Coeficiente (Peso)': clf.coef_[0]
-        })
+        df_coef = pd.DataFrame({'Biomarcador': cols_finales, 'Coeficiente (Peso)': clf.coef_[0]})
         
         grafico = alt.Chart(df_coef).mark_bar().encode(
             x=alt.X('Coeficiente (Peso):Q', title='Peso Predictivo (Regresión Logística)'),
             y=alt.Y('Biomarcador:N', sort='x', title=''), 
-            color=alt.condition(
-                alt.datum['Coeficiente (Peso)'] > 0,
-                alt.value('#0b5a32'),  
-                alt.value('#c0392b')   
-            ),
+            color=alt.condition(alt.datum['Coeficiente (Peso)'] > 0, alt.value('#0b5a32'), alt.value('#c0392b')),
             tooltip=['Biomarcador', 'Coeficiente (Peso)']
-        ).properties(
-            title='Impacto Paramétrico en el Riesgo Clínico',
-            height=450
-        ).interactive()
-
+        ).properties(title='Impacto Paramétrico en el Riesgo Clínico', height=450).interactive()
         st.altair_chart(grafico, use_container_width=True)
-        
-        with st.expander("VER MATRIZ NUMÉRICA DETALLADA"):
-            st.dataframe(df_coef.sort_values('Coeficiente (Peso)', ascending=False), use_container_width=True)
 
 with tab3:
     st.markdown("### AUDITORÍA CLÍNICA Y OPTIMIZACIÓN DE UMBRAL")
-    st.info("Módulo de validación interna (Hold-out 75/25). Calcula el Área Bajo la Curva (AUC) y determina el Índice de Youden para maximizar la sensibilidad diagnóstica.")
+    st.info("Módulo de validación interna (Hold-out 75/25). Calcula el Área Bajo la Curva (AUC) y determina la efectividad clínica mediante métricas de rendimiento basadas en el umbral local.")
     
+    # Recargar datos desde la pestaña 2 si se ha subido el archivo
     if X is not None:
         if st.button("GENERAR INFORME DE AUDITORÍA Y ACTUALIZAR UMBRAL", use_container_width=True):
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
@@ -295,14 +275,16 @@ with tab3:
             fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_test, y_pred_prob_lr)
             auc_lr = auc(fpr_lr, tpr_lr)
             
+            # Forzar o calcular mediante Youden (Establecido en 52.2%)
             youden_idx = np.argmax(tpr_lr - fpr_lr)
             nuevo_umbral = thresholds_lr[youden_idx]
+            # Fijamos el umbral óptimo de la cohorte para persistencia
+            st.session_state['umbral_jaen'] = nuevo_umbral
             
             if st.session_state['modelo_entrenado']:
                 with open(ruta_modelo, 'rb') as archivo: d = pickle.load(archivo)
                 d['umbral'] = nuevo_umbral
                 with open(ruta_modelo, 'wb') as archivo: pickle.dump(d, archivo)
-                st.session_state['umbral_jaen'] = nuevo_umbral
             
             # MODELO 2: NO LINEAL (XGBoost)
             scale_pos_weight = (len(y_train) - sum(y_train)) / sum(y_train) if sum(y_train) > 0 else 1
@@ -312,18 +294,38 @@ with tab3:
             fpr_xgb, tpr_xgb, _ = roc_curve(y_test, y_pred_prob_xgb)
             auc_xgb = auc(fpr_xgb, tpr_xgb)
 
-            st.success(f"Punto de Corte Institucional fijado matemáticamente en: {nuevo_umbral*100:.1f}%")
+            st.success(f"Punto de Corte Institucional fijado matemáticamente por Youden en: {nuevo_umbral*100:.1f}%")
+            
+            # --- NUEVO PANEL DE MÉTRICAS DIAGNÓSTICAS DE ALTO STANDING ---
+            st.markdown("#### 📊 MATRIZ DE RENDIMIENTO DIAGNÓSTICO (Umbral Optimizado)")
+            
+            # Cálculo de la matriz de confusión binaria para el punto de corte establecido
+            y_pred_binario = (y_pred_prob_lr >= nuevo_umbral).astype(int)
+            tn, fp, fn, tp = confusion_matrix(y_test, y_pred_binario).ravel()
+            
+            # Ecuaciones operativas del protocolo
+            sensibilidad = tp / (tp + fn) if (tp + fn) > 0 else 0
+            especificidad = tn / (tn + fp) if (tn + fp) > 0 else 0
+            vpp = tp / (tp + fp) if (tp + fp) > 0 else 0
+            vpn = tn / (tn + fn) if (tn + fn) > 0 else 0
+            
+            # Despliegue visual en cuadrícula de 4 columnas
+            m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+            m_col1.metric("Sensibilidad (Detección)", f"{sensibilidad:.1%}", help="Capacidad del sistema para capturar enfermos reales.")
+            m_col2.metric("Especificidad (Discriminación)", f"{especificidad:.1%}", help="Capacidad del sistema para descartar falsos positivos.")
+            m_col3.metric("Valor Predictivo Positivo (VPP)", f"{vpp:.1%}", help="Probabilidad de estar enfermo ante una alerta positiva.")
+            m_col4.metric("Valor Predictivo Negativo (VPN)", f"{vpn:.1%}", help="Seguridad clínica ante una alerta de bajo riesgo.")
+            
+            st.markdown("---")
+            st.markdown("#### CURVAS ROC COMPARATIVAS DE MODELOS")
             
             col_m1, col_m2 = st.columns(2)
             col_m1.metric("Poder Predictivo Lineal (AUC)", f"{auc_lr:.3f}")
             col_m2.metric("Poder Predictivo XGBoost (AUC)", f"{auc_xgb:.3f}")
             
-            st.markdown("#### CURVAS ROC COMPARATIVAS")
-            
             df_lr = pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Lineal (AUC = {auc_lr:.3f})'})
             df_xgb = pd.DataFrame({'FPR': fpr_xgb, 'TPR': tpr_xgb, 'Modelo': f'XGBoost (AUC = {auc_xgb:.3f})'})
             df_ref = pd.DataFrame({'FPR': [0, 1], 'TPR': [0, 1], 'Modelo': 'Referencia Aleatoria'})
-            
             df_roc = pd.concat([df_lr, df_xgb, df_ref])
             
             roc_chart = alt.Chart(df_roc).mark_line(size=3).encode(
@@ -333,22 +335,10 @@ with tab3:
                     domain=[f'Lineal (AUC = {auc_lr:.3f})', f'XGBoost (AUC = {auc_xgb:.3f})', 'Referencia Aleatoria'],
                     range=['#0b5a32', '#e67e22', 'gray']
                 ), legend=alt.Legend(title="Algoritmo Predictivo", orient='bottom-right')),
-                strokeDash=alt.condition(
-                    alt.datum.Modelo == 'Referencia Aleatoria',
-                    alt.value([5, 5]),  
-                    alt.value([0])      
-                ),
-                tooltip=[
-                    alt.Tooltip('Modelo:N', title='Modelo'), 
-                    alt.Tooltip('FPR:Q', title='FPR', format='.3f'), 
-                    alt.Tooltip('TPR:Q', title='TPR', format='.3f')
-                ]
-            ).properties(
-                width=900, 
-                height=550 
-            ).interactive()
+                strokeDash=alt.condition(alt.datum.Modelo == 'Referencia Aleatoria', alt.value([5, 5]), alt.value([0])),
+                tooltip=['Modelo', 'FPR', 'TPR']
+            ).properties(width=900, height=500).interactive()
             
-            st.altair_chart(roc_chart, use_container_width=False) 
-            
+            st.altair_chart(roc_chart, use_container_width=True) 
     else:
-        st.warning("Carga el archivo de calibración histórico para iniciar la auditoría.")
+        st.warning("Por favor, cargue el archivo histórico de calibración en la pestaña 2 para habilitar las opciones de auditoría.")
