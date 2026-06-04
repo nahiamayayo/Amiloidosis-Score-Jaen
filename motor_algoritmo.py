@@ -8,16 +8,16 @@ BIOMARCADORES_OFICIALES = [
 
 # Valores de referencia de la cohorte control de Jaén para imputación (Medianas locales)
 MEDIANAS_JAEN = {
-    'Glucosa': 94.0,
-    'Trigliceridos': 110.0,
-    'Colesterol': 180.0,
-    'Gamma_GT': 28.0,
-    'Albumina': 4.2,
-    'MCH': 30.0,
-    'Magnesio': 0.85,
-    'Hb_libre': 2.5,
-    'PCR': 1.2,
-    'proBNP': 150.0
+    'Glucosa': 88.1,
+    'Trigliceridos': 70.45,
+    'Colesterol': 85.9,
+    'Gamma_GT': 24.1,
+    'Albumina': 4.34,
+    'MCH': 31.2,
+    'Magnesio': 2.08,
+    'Hb_libre': 14.35,
+    'PCR': 2.77,
+    'proBNP': 539
 }
 
 # Rangos de normalidad del Laboratorio Central del HUJ (Hospital Universitario de Jaén)
