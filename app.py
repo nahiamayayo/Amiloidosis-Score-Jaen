@@ -20,7 +20,7 @@ st.set_page_config(page_title="Protocolo CardioGen Jaén", layout="wide", initia
 ruta_modelo = 'modelo_jaen.pkl'
 ruta_datos_locales = 'datos_historicos_hospital.csv'
 
-# Inicialización estricta de estados de sesión para evitar borrado entre pestañas
+# Inicialización estricta de estados de sesión
 if 'modelo_entrenado' not in st.session_state:
     st.session_state['modelo_entrenado'] = False
 if 'umbral_jaen' not in st.session_state:
@@ -52,10 +52,11 @@ def limpiar_valor_para_entrenamiento(val):
     try: return float(val_str)
     except: return np.nan
 
-# --- 2. ESTILOS VISUALES CORPORATIVOS (MEDICAL TEAL Y SLATE) ---
+# --- 2. ESTILOS VISUALES INSTITUCIONALES (VERDE ANDALUZ Y OLIVA) ---
+# Hemos seleccionado los códigos hexadecimales exactos de la Junta de Andalucía
 st.markdown("""
 <style>
-    /* Fondo general de la aplicación */
+    /* Fondo general */
     .stApp { background-color: #f8fafc; }
     .block-container { max-width: 1100px !important; padding-top: 2rem !important; }
     
@@ -67,16 +68,19 @@ st.markdown("""
         border-radius: 0px !important; 
         box-shadow: none !important;
     }
-    h1 { color: #0f766e !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 800 !important; letter-spacing: -0.5px; }
+    /* Verde Título Principal (Corporate Green - SAS) */
+    h1 { color: #008f4c !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 800 !important; letter-spacing: -0.5px; }
+    
+    /* Gris Títulos Secundarios */
     h2, h3, h4 { color: #334155 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; }
     
-    /* Configuración de Pestañas */
+    /* Configuración de Pestañas (Verde SAS) */
     .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #e2e8f0; gap: 20px; }
-    .stTabs [aria-selected="true"] { color: #0f766e !important; border-bottom: 3px solid #0f766e !important; font-weight: 700 !important; }
+    .stTabs [aria-selected="true"] { color: #008f4c !important; border-bottom: 3px solid #008f4c !important; font-weight: 700 !important; }
     
-    /* Botones de Acción Clínicos */
+    /* Botones de Acción Clínicos (Verde Oliva Intenso) */
     .stButton>button { 
-        background-color: #0f766e !important; 
+        background-color: #3b5a2f !important; 
         color: white !important; 
         font-weight: 600 !important; 
         border-radius: 6px !important;
@@ -88,13 +92,13 @@ st.markdown("""
         letter-spacing: 0.5px;
     }
     .stButton>button:hover {
-        background-color: #115e59 !important;
+        background-color: #2b4323 !important;
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         transform: translateY(-1px);
     }
     
-    /* Visualización de Métricas Estadísticas */
-    div[data-testid="stMetricValue"] { color: #0f766e; font-weight: 800; font-size: 2.2rem;}
+    /* Métricas Estadísticas (Verde Oliva Intenso) */
+    div[data-testid="stMetricValue"] { color: #3b5a2f; font-weight: 800; font-size: 2.2rem;}
     .streamlit-expanderHeader { font-weight: 600 !important; color: #475569 !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -294,18 +298,18 @@ with tab2:
         st.markdown("#### IMPACTO PARAMÉTRICO EN EL RIESGO CLÍNICO")
         st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>En verde se representan los factores de riesgo (suman al score); en rojo los factores protectores (restan).</p>", unsafe_allow_html=True)
         
-        # COLOR ACTUALIZADO: Medical Teal vs Carmesí Rosado
+        # COLOR ACTUALIZADO: Verde Oliva SAS vs Rojo Fisiológico
         grafico = alt.Chart(st.session_state['df_coef_jaen']).mark_bar().encode(
             x=alt.X('Coeficiente (Peso matemático):Q', title='Peso Predictivo (Regresión Logística)'),
             y=alt.Y('Biomarcador:N', sort='x', title=''), 
-            color=alt.condition(alt.datum['Coeficiente (Peso matemático)'] > 0, alt.value('#0f766e'), alt.value('#be123c')),
+            color=alt.condition(alt.datum['Coeficiente (Peso matemático)'] > 0, alt.value('#3b5a2f'), alt.value('#b91c1c')),
             tooltip=['Biomarcador', 'Coeficiente (Peso matemático)']
         ).properties(height=400).interactive()
         
         st.altair_chart(grafico, use_container_width=True)
 
 # ==========================================
-# PESTAÑA 3: AUDITORÍA E INFORMES (PERSISTENTE Y COLORES ACTUALIZADOS)
+# PESTAÑA 3: AUDITORÍA E INFORMES (PERSISTENTE Y COLORES INSTITUCIONALES)
 # ==========================================
 with tab3:
     st.markdown("### AUDITORÍA CLÍNICA Y OPTIMIZACIÓN DE UMBRAL")
@@ -357,12 +361,13 @@ with tab3:
             vpp = tp / (tp + fp) if (tp + fp) > 0 else 0
             vpn = tn / (tn + fn) if (tn + fn) > 0 else 0
             
+            # Datos ROC unificados
             df_lr = pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Regresion Lineal (AUC = {auc_lr:.3f})'})
             df_xgb = pd.DataFrame({'FPR': fpr_xgb, 'TPR': tpr_xgb, 'Modelo': f'XGBoost Avanzado (AUC = {auc_xgb:.3f})'})
             df_ref = pd.DataFrame({'FPR': [0, 1], 'TPR': [0, 1], 'Modelo': 'Referencia Aleatoria'})
             df_roc = pd.concat([df_lr, df_xgb, df_ref])
             
-            # Registro persistente en sesión
+            # Volcado al estado de sesión
             st.session_state['auditoria_lista'] = True
             st.session_state['nuevo_umbral_calculado'] = nuevo_umbral
             st.session_state['m_sensibilidad'] = sensibilidad
@@ -393,13 +398,13 @@ with tab3:
         col_m1.metric("Poder Predictivo Lineal (AUC)", f"{st.session_state['auc_lr']:.3f}")
         col_m2.metric("Poder Predictivo XGBoost (AUC)", f"{st.session_state['auc_xgb']:.3f}")
         
-        # COLOR ACTUALIZADO EN ROC: Medical Teal (Lineal), Ámbar/Naranja (XGBoost) y Slate (Referencia)
+        # COLOR ACTUALIZADO EN ROC: Verde Oliva (Lineal), Verde SAS (XGBoost) y Slate (Referencia)
         roc_chart = alt.Chart(st.session_state['df_roc_data']).mark_line(size=3).encode(
             x=alt.X('FPR:Q', title='Tasa de Falsos Positivos (1 - Especificidad)'),
             y=alt.Y('TPR:Q', title='Tasa de Verdaderos Positivos (Sensibilidad)'),
             color=alt.Color('Modelo:N', scale=alt.Scale(
                 domain=[f"Regresion Lineal (AUC = {st.session_state['auc_lr']:.3f})", f"XGBoost Avanzado (AUC = {st.session_state['auc_xgb']:.3f})", 'Referencia Aleatoria'],
-                range=['#0f766e', '#d97706', '#94a3b8']
+                range=['#3b5a2f', '#008f4c', '#94a3b8']
             ), legend=alt.Legend(title="Algoritmo Predictivo", orient='bottom-right')),
             strokeDash=alt.condition(alt.datum.Modelo == 'Referencia Aleatoria', alt.value([5, 5]), alt.value([0])),
             tooltip=['Modelo', 'FPR', 'TPR']
