@@ -52,7 +52,7 @@ def limpiar_valor_para_entrenamiento(val):
     try: return float(val_str)
     except: return np.nan
 
-# --- 2. ESTILOS VISUALES CORPORATIVOS (AZUL Y VERDE SANITARIO) ---
+# --- 2. ESTILOS VISUALES CORPORATIVOS (MEDICAL TEAL Y SLATE) ---
 st.markdown("""
 <style>
     /* Fondo general de la aplicación */
@@ -67,35 +67,35 @@ st.markdown("""
         border-radius: 0px !important; 
         box-shadow: none !important;
     }
-    h1 { color: #1e3a8a !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 800 !important; letter-spacing: -0.5px; }
-    h2, h3, h4 { color: #0f172a !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; }
+    h1 { color: #0f766e !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 800 !important; letter-spacing: -0.5px; }
+    h2, h3, h4 { color: #334155 !important; font-family: 'Segoe UI', system-ui, sans-serif; font-weight: 700 !important; }
     
     /* Configuración de Pestañas */
     .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #e2e8f0; gap: 20px; }
-    .stTabs [aria-selected="true"] { color: #1e3a8a !important; border-bottom: 3px solid #1e3a8a !important; font-weight: 700 !important; }
+    .stTabs [aria-selected="true"] { color: #0f766e !important; border-bottom: 3px solid #0f766e !important; font-weight: 700 !important; }
     
     /* Botones de Acción Clínicos */
     .stButton>button { 
-        background-color: #0b5a32 !important; 
+        background-color: #0f766e !important; 
         color: white !important; 
         font-weight: 600 !important; 
-        border-radius: 4px !important;
+        border-radius: 6px !important;
         padding: 0.6rem 1.2rem !important;
         border: none !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         transition: all 0.3s ease;
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
     .stButton>button:hover {
-        background-color: #084224 !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        background-color: #115e59 !important;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         transform: translateY(-1px);
     }
     
     /* Visualización de Métricas Estadísticas */
-    div[data-testid="stMetricValue"] { color: #1e3a8a; font-weight: 800; font-size: 2.2rem;}
-    .streamlit-expanderHeader { font-weight: 600 !important; color: #334155 !important; }
+    div[data-testid="stMetricValue"] { color: #0f766e; font-weight: 800; font-size: 2.2rem;}
+    .streamlit-expanderHeader { font-weight: 600 !important; color: #475569 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -227,7 +227,7 @@ def procesar_y_guardar_dataframe(df):
     except Exception as e:
         st.error(f"Error procesando las columnas de la base de datos. Detalle: {e}")
 
-# Ejecución de carga en segundo plano si ya existe el archivo físico en el servidor
+# Carga automática de fondo si existe copia en disco
 if os.path.exists(ruta_datos_locales) and st.session_state['X_jaen'] is None:
     try:
         df_local = pd.read_csv(ruta_datos_locales)
@@ -236,7 +236,7 @@ if os.path.exists(ruta_datos_locales) and st.session_state['X_jaen'] is None:
         pass
 
 # ==========================================
-# PESTAÑA 2: CALIBRACIÓN DEL MOTOR (ESTRUCTURA VERTICAL Y SIN EMOJIS)
+# PESTAÑA 2: CALIBRACIÓN DEL MOTOR
 # ==========================================
 with tab2:
     st.markdown("### CALIBRACIÓN DEL MOTOR PREDICTIVO")
@@ -281,7 +281,7 @@ with tab2:
             
             st.success("Operación completada: Motor predictivo calibrado y matriz de pesos persistida.")
 
-    # Renderizado Stacked (Uno debajo de otro) para evitar recortes laterales
+    # Renderizado Vertical Óptimo
     if 'df_coef_jaen' in st.session_state:
         st.write("")
         st.divider()
@@ -294,17 +294,18 @@ with tab2:
         st.markdown("#### IMPACTO PARAMÉTRICO EN EL RIESGO CLÍNICO")
         st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>En verde se representan los factores de riesgo (suman al score); en rojo los factores protectores (restan).</p>", unsafe_allow_html=True)
         
+        # COLOR ACTUALIZADO: Medical Teal vs Carmesí Rosado
         grafico = alt.Chart(st.session_state['df_coef_jaen']).mark_bar().encode(
             x=alt.X('Coeficiente (Peso matemático):Q', title='Peso Predictivo (Regresión Logística)'),
             y=alt.Y('Biomarcador:N', sort='x', title=''), 
-            color=alt.condition(alt.datum['Coeficiente (Peso matemático)'] > 0, alt.value('#0b5a32'), alt.value('#b91c1c')),
+            color=alt.condition(alt.datum['Coeficiente (Peso matemático)'] > 0, alt.value('#0f766e'), alt.value('#be123c')),
             tooltip=['Biomarcador', 'Coeficiente (Peso matemático)']
         ).properties(height=400).interactive()
         
         st.altair_chart(grafico, use_container_width=True)
 
 # ==========================================
-# PESTAÑA 3: AUDITORÍA E INFORMES (PERSISTENCIA COMPLETA FIX)
+# PESTAÑA 3: AUDITORÍA E INFORMES (PERSISTENTE Y COLORES ACTUALIZADOS)
 # ==========================================
 with tab3:
     st.markdown("### AUDITORÍA CLÍNICA Y OPTIMIZACIÓN DE UMBRAL")
@@ -361,7 +362,7 @@ with tab3:
             df_ref = pd.DataFrame({'FPR': [0, 1], 'TPR': [0, 1], 'Modelo': 'Referencia Aleatoria'})
             df_roc = pd.concat([df_lr, df_xgb, df_ref])
             
-            # Volcado al estado de sesión para bloquear la destrucción de variables al cambiar de pestaña
+            # Registro persistente en sesión
             st.session_state['auditoria_lista'] = True
             st.session_state['nuevo_umbral_calculado'] = nuevo_umbral
             st.session_state['m_sensibilidad'] = sensibilidad
@@ -372,7 +373,7 @@ with tab3:
             st.session_state['auc_xgb'] = auc_xgb
             st.session_state['df_roc_data'] = df_roc
 
-    # Bloque de visualización permanente (Persiste aunque cambies a la pestaña 1 o 2)
+    # Bloque de visualización permanente de la auditoría
     if 'auditoria_lista' in st.session_state:
         st.write("")
         st.divider()
@@ -392,12 +393,13 @@ with tab3:
         col_m1.metric("Poder Predictivo Lineal (AUC)", f"{st.session_state['auc_lr']:.3f}")
         col_m2.metric("Poder Predictivo XGBoost (AUC)", f"{st.session_state['auc_xgb']:.3f}")
         
+        # COLOR ACTUALIZADO EN ROC: Medical Teal (Lineal), Ámbar/Naranja (XGBoost) y Slate (Referencia)
         roc_chart = alt.Chart(st.session_state['df_roc_data']).mark_line(size=3).encode(
             x=alt.X('FPR:Q', title='Tasa de Falsos Positivos (1 - Especificidad)'),
             y=alt.Y('TPR:Q', title='Tasa de Verdaderos Positivos (Sensibilidad)'),
             color=alt.Color('Modelo:N', scale=alt.Scale(
                 domain=[f"Regresion Lineal (AUC = {st.session_state['auc_lr']:.3f})", f"XGBoost Avanzado (AUC = {st.session_state['auc_xgb']:.3f})", 'Referencia Aleatoria'],
-                range=['#1e3a8a', '#0b5a32', '#94a3b8'] # Escudería cromática: Azul institucional, verde clínico y gris de control
+                range=['#0f766e', '#d97706', '#94a3b8']
             ), legend=alt.Legend(title="Algoritmo Predictivo", orient='bottom-right')),
             strokeDash=alt.condition(alt.datum.Modelo == 'Referencia Aleatoria', alt.value([5, 5]), alt.value([0])),
             tooltip=['Modelo', 'FPR', 'TPR']
