@@ -119,17 +119,21 @@ with tab1:
                     t = pagina.extract_text(layout=True)
                     if t: texto_completo += t + "\n"
             
-            patrones = {
-                'Glucosa': r'Glucosa', 'Trigliceridos': r'Triglic[eé]ridos|Triglic', 'Colesterol': r'Colesterol',
-                'Gamma_GT': r'Gamma\s*glutamiltransferasa|Gamma[\s-]*GT', 'Albumina': r'Alb[uú]mina',
-                'MCH': r'Hemoglobina\s*corpuscular\s*media|HCM|MCH', 'Magnesio': r'Magnesio',
-                'Hb_libre': r'Hemoglobina(?!\s*glicosilada|\s*corpuscular)',
-                'PCR': r'Prote[ií]na\s*C\s*reactiva|PCR', 'proBNP': r'pro-p[eé]ptido\s*natriur[eé]tico\s*cerebral|proBNP|NT-proBNP'
-            }
-            for k, p in patrones.items():
-                m = re.search(rf"(?:{p})[^\dA-Za-z]*(\d+[.,]\d+|\d+)", texto_completo, re.IGNORECASE)
-                if m: valores_extraidos[k] = float(m.group(1).replace(',', '.'))
-            st.success("Extracción digital completada con éxito.")
+            # CONTROL DE SEGURIDAD PARA PDFs ESCANEADOS
+            if not texto_completo.strip():
+                st.warning("⚠️ ATENCIÓN: El documento parece ser una imagen escaneada o no contiene texto digital. El sistema de extracción óptica requiere un PDF nativo del SAS. Por favor, introduzca los valores manualmente.")
+            else:
+                patrones = {
+                    'Glucosa': r'Glucosa', 'Trigliceridos': r'Triglic[eé]ridos|Triglic', 'Colesterol': r'Colesterol',
+                    'Gamma_GT': r'Gamma\s*glutamiltransferasa|Gamma[\s-]*GT', 'Albumina': r'Alb[uú]mina',
+                    'MCH': r'Hemoglobina\s*corpuscular\s*media|HCM|MCH', 'Magnesio': r'Magnesio',
+                    'Hb_libre': r'Hemoglobina(?!\s*glicosilada|\s*corpuscular)',
+                    'PCR': r'Prote[ií]na\s*C\s*reactiva|PCR', 'proBNP': r'pro-p[eé]ptido\s*natriur[eé]tico\s*cerebral|proBNP|NT-proBNP'
+                }
+                for k, p in patrones.items():
+                    m = re.search(rf"(?:{p})[^\dA-Za-z]*(\d+[.,]\d+|\d+)", texto_completo, re.IGNORECASE)
+                    if m: valores_extraidos[k] = float(m.group(1).replace(',', '.'))
+                st.success("Extracción digital completada con éxito.")
         except Exception as e: st.error(f"Error procesando documento PDF: {e}")
 
     with st.expander("REVISIÓN MANUAL DE VALORES EXTRAÍDOS", expanded=True):
@@ -197,12 +201,29 @@ with tab1:
                     st.code(informe, language="text")
 
 # ==========================================
-# PESTAÑA 2 Y 3: ENTRENAMIENTO Y AUDITORÍA
+# GESTIÓN DE DATOS HISTÓRICOS (OPTIMIZADA)
 # ==========================================
 def preparar_datos_csv():
-    archivo_csv = st.file_uploader("Cargar Base de Datos Histórica (.xlsx / .csv)", type=["xlsx", "csv"])
+    ruta_guardado_local = 'datos_historicos_hospital.csv'
+    
+    st.markdown("#### CARGA DE ARCHIVOS")
+    archivo_csv = st.file_uploader("Cargar Base de Datos Histórica (.xlsx / .csv)", type=["xlsx", "csv"], label_visibility="collapsed")
+    
+    df = None
+    
+    # Escenario A: El usuario acaba de subir un archivo nuevo
     if archivo_csv:
         df = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
+        # Hacemos el volcado permanente a disco
+        df.to_csv(ruta_guardado_local, index=False)
+        st.toast("💾 Base de datos guardada de forma permanente en el servidor local.", icon="✅")
+    
+    # Escenario B: No hay archivo en el botón, pero existe la copia de seguridad de la sesión anterior
+    elif os.path.exists(ruta_guardado_local):
+        df = pd.read_csv(ruta_guardado_local)
+        st.caption("📂 *Información del sistema: Se ha detectado un histórico guardado. No es necesario reajustar el archivo a menos que desee actualizar la cohorte.*")
+        
+    if df is not None:
         traductor = {
             'Gluosa': 'Glucosa', 'Glucosa': 'Glucosa', 'Trigliéridos': 'Trigliceridos', 'Triglicéridos': 'Trigliceridos',
             'olesterol': 'Colesterol', 'Colesterol': 'Colesterol', 'Gamma-GT': 'Gamma_GT', 'Albúmina': 'Albumina',
@@ -221,44 +242,73 @@ def preparar_datos_csv():
             return None, None, None
     return None, None, None
 
+# ==========================================
+# PESTAÑA 2: CALIBRACIÓN DEL MOTOR (PERSISTENTE)
+# ==========================================
 with tab2:
     st.markdown("### CALIBRACIÓN DEL MOTOR PREDICTIVO")
     st.info("Módulo restringido para actualización de la matriz de pesos del modelo local mediante Regresión Logística Multivariante.")
     X, y, cols_finales = preparar_datos_csv()
     
-    if X is not None and st.button("INICIAR CALIBRACIÓN INSTITUCIONAL", use_container_width=True):
-        imputer = SimpleImputer(strategy='median')
-        X_imp = imputer.fit_transform(X)
-        scaler = StandardScaler()
-        X_sca = scaler.fit_transform(X_imp)
-        
-        clf = LogisticRegression(max_iter=2000, class_weight='balanced')
-        clf.fit(X_sca, y)
-        
-        umbral_actual = st.session_state.get('umbral_jaen', 0.522)
-        
-        with open(ruta_modelo, 'wb') as archivo:
-            pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': cols_finales, 'umbral': umbral_actual}, archivo)
+    if X is not None:
+        if st.button("INICIAR CALIBRACIÓN INSTITUCIONAL", use_container_width=True):
+            imputer = SimpleImputer(strategy='median')
+            X_imp = imputer.fit_transform(X)
+            scaler = StandardScaler()
+            X_sca = scaler.fit_transform(X_imp)
             
-        st.session_state.update({'modelo_entrenado': True, 'clf_jaen': clf, 'imputer_jaen': imputer, 'scaler_jaen': scaler, 'columnas_jaen': cols_finales})
-        st.success("Operación completada: Motor predictivo calibrado y matriz de pesos guardada en el servidor central.")
-        
-        st.markdown("#### EXTRACCIÓN DE COEFICIENTES MATEMÁTICOS")
-        df_coef = pd.DataFrame({'Biomarcador': cols_finales, 'Coeficiente (Peso)': clf.coef_[0]})
-        
-        grafico = alt.Chart(df_coef).mark_bar().encode(
-            x=alt.X('Coeficiente (Peso):Q', title='Peso Predictivo (Regresión Logística)'),
-            y=alt.Y('Biomarcador:N', sort='x', title=''), 
-            color=alt.condition(alt.datum['Coeficiente (Peso)'] > 0, alt.value('#0b5a32'), alt.value('#c0392b')),
-            tooltip=['Biomarcador', 'Coeficiente (Peso)']
-        ).properties(title='Impacto Paramétrico en el Riesgo Clínico', height=450).interactive()
-        st.altair_chart(grafico, use_container_width=True)
+            clf = LogisticRegression(max_iter=2000, class_weight='balanced')
+            clf.fit(X_sca, y)
+            
+            umbral_actual = st.session_state.get('umbral_jaen', 0.522)
+            
+            with open(ruta_modelo, 'wb') as archivo:
+                pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': cols_finales, 'umbral': umbral_actual}, archivo)
+                
+            df_coef = pd.DataFrame({
+                'Biomarcador': cols_finales, 
+                'Coeficiente (Peso matemático)': np.round(clf.coef_[0], 4)
+            }).sort_values(by='Coeficiente (Peso matemático)', ascending=False)
+            
+            # Blindaje en memoria de sesión
+            st.session_state['df_coef_jaen'] = df_coef
+            st.session_state['modelo_entrenado'] = True
+            st.session_state['clf_jaen'] = clf
+            st.session_state['imputer_jaen'] = imputer
+            st.session_state['scaler_jaen'] = scaler
+            st.session_state['columnas_jaen'] = cols_finales
+            
+            st.success("Operación completada: Motor predictivo calibrado y matriz de pesos guardada en el servidor central.")
 
+    if 'df_coef_jaen' in st.session_state:
+        st.write("")
+        st.divider()
+        col_tabla, col_grafico = st.columns([1.1, 1.9])
+        
+        with col_tabla:
+            st.markdown("#### 📋 TABLA DE COEFICIENTES")
+            st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>Pesos numéricos exactos calculados para la ecuación Logit de Jaén.</p>", unsafe_allow_html=True)
+            st.dataframe(st.session_state['df_coef_jaen'], use_container_width=True, hide_index=True)
+            
+        with col_grafico:
+            st.markdown("#### 📊 IMPACTO PARAMÉTRICO EN EL RIESGO CLÍNICO")
+            st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>En verde los factores de riesgo (suman); en rojo los factores protectores (restan).</p>", unsafe_allow_html=True)
+            
+            grafico = alt.Chart(st.session_state['df_coef_jaen']).mark_bar().encode(
+                x=alt.X('Coeficiente (Peso matemático):Q', title='Peso Predictivo (Regresión Logística)'),
+                y=alt.Y('Biomarcador:N', sort='x', title=''), 
+                color=alt.condition(alt.datum['Coeficiente (Peso matemático)'] > 0, alt.value('#0b5a32'), alt.value('#c0392b')),
+                tooltip=['Biomarcador', 'Coeficiente (Peso matemático)']
+            ).properties(height=380).interactive()
+            st.altair_chart(grafico, use_container_width=True)
+
+# ==========================================
+# PESTAÑA 3: AUDITORÍA E INFORMES (PERSISTENTE)
+# ==========================================
 with tab3:
     st.markdown("### AUDITORÍA CLÍNICA Y OPTIMIZACIÓN DE UMBRAL")
     st.info("Módulo de validación interna (Hold-out 75/25). Calcula el Área Bajo la Curva (AUC) y determina la efectividad clínica mediante métricas de rendimiento basadas en el umbral local.")
     
-    # Recargar datos desde la pestaña 2 si se ha subido el archivo
     if X is not None:
         if st.button("GENERAR INFORME DE AUDITORÍA Y ACTUALIZAR UMBRAL", use_container_width=True):
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
@@ -268,17 +318,16 @@ with tab3:
             X_train_sca = sca_val.fit_transform(imp_val.fit_transform(X_train))
             X_test_sca = sca_val.transform(imp_val.transform(X_test))
             
-            # MODELO 1: LINEAL 
+            # MODELO LINEAL
             clf_lr = LogisticRegression(max_iter=2000, class_weight='balanced')
             clf_lr.fit(X_train_sca, y_train)
             y_pred_prob_lr = clf_lr.predict_proba(X_test_sca)[:, 1]
             fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_test, y_pred_prob_lr)
             auc_lr = auc(fpr_lr, tpr_lr)
             
-            # Forzar o calcular mediante Youden (Establecido en 52.2%)
+            # Cálculo de Youden
             youden_idx = np.argmax(tpr_lr - fpr_lr)
             nuevo_umbral = thresholds_lr[youden_idx]
-            # Fijamos el umbral óptimo de la cohorte para persistencia
             st.session_state['umbral_jaen'] = nuevo_umbral
             
             if st.session_state['modelo_entrenado']:
@@ -286,59 +335,42 @@ with tab3:
                 d['umbral'] = nuevo_umbral
                 with open(ruta_modelo, 'wb') as archivo: pickle.dump(d, archivo)
             
-            # MODELO 2: NO LINEAL (XGBoost)
+            # MODELO XGBOOST
             scale_pos_weight = (len(y_train) - sum(y_train)) / sum(y_train) if sum(y_train) > 0 else 1
             clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
             clf_xgb.fit(X_train_sca, y_train)
             y_pred_prob_xgb = clf_xgb.predict_proba(X_test_sca)[:, 1]
             fpr_xgb, tpr_xgb, _ = roc_curve(y_test, y_pred_prob_xgb)
             auc_xgb = auc(fpr_xgb, tpr_xgb)
-
-            st.success(f"Punto de Corte Institucional fijado matemáticamente por Youden en: {nuevo_umbral*100:.1f}%")
             
-            # --- NUEVO PANEL DE MÉTRICAS DIAGNÓSTICAS DE ALTO STANDING ---
-            st.markdown("#### 📊 MATRIZ DE RENDIMIENTO DIAGNÓSTICO (Umbral Optimizado)")
-            
-            # Cálculo de la matriz de confusión binaria para el punto de corte establecido
+            # Matriz de Confusión y Métricas Diagnósticas
             y_pred_binario = (y_pred_prob_lr >= nuevo_umbral).astype(int)
             tn, fp, fn, tp = confusion_matrix(y_test, y_pred_binario).ravel()
             
-            # Ecuaciones operativas del protocolo
             sensibilidad = tp / (tp + fn) if (tp + fn) > 0 else 0
             especificidad = tn / (tn + fp) if (tn + fp) > 0 else 0
             vpp = tp / (tp + fp) if (tp + fp) > 0 else 0
             vpn = tn / (tn + fn) if (tn + fn) > 0 else 0
             
-            # Despliegue visual en cuadrícula de 4 columnas
-            m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-            m_col1.metric("Sensibilidad (Detección)", f"{sensibilidad:.1%}", help="Capacidad del sistema para capturar enfermos reales.")
-            m_col2.metric("Especificidad (Discriminación)", f"{especificidad:.1%}", help="Capacidad del sistema para descartar falsos positivos.")
-            m_col3.metric("Valor Predictivo Positivo (VPP)", f"{vpp:.1%}", help="Probabilidad de estar enfermo ante una alerta positiva.")
-            m_col4.metric("Valor Predictivo Negativo (VPN)", f"{vpn:.1%}", help="Seguridad clínica ante una alerta de bajo riesgo.")
-            
-            st.markdown("---")
-            st.markdown("#### CURVAS ROC COMPARATIVAS DE MODELOS")
-            
-            col_m1, col_m2 = st.columns(2)
-            col_m1.metric("Poder Predictivo Lineal (AUC)", f"{auc_lr:.3f}")
-            col_m2.metric("Poder Predictivo XGBoost (AUC)", f"{auc_xgb:.3f}")
-            
+            # Estructuración de datos ROC para gráfico
             df_lr = pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Lineal (AUC = {auc_lr:.3f})'})
             df_xgb = pd.DataFrame({'FPR': fpr_xgb, 'TPR': tpr_xgb, 'Modelo': f'XGBoost (AUC = {auc_xgb:.3f})'})
             df_ref = pd.DataFrame({'FPR': [0, 1], 'TPR': [0, 1], 'Modelo': 'Referencia Aleatoria'})
             df_roc = pd.concat([df_lr, df_xgb, df_ref])
             
-            roc_chart = alt.Chart(df_roc).mark_line(size=3).encode(
-                x=alt.X('FPR:Q', title='Tasa de Falsos Positivos (1 - Especificidad)'),
-                y=alt.Y('TPR:Q', title='Tasa de Verdaderos Positivos (Sensibilidad)'),
-                color=alt.Color('Modelo:N', scale=alt.Scale(
-                    domain=[f'Lineal (AUC = {auc_lr:.3f})', f'XGBoost (AUC = {auc_xgb:.3f})', 'Referencia Aleatoria'],
-                    range=['#0b5a32', '#e67e22', 'gray']
-                ), legend=alt.Legend(title="Algoritmo Predictivo", orient='bottom-right')),
-                strokeDash=alt.condition(alt.datum.Modelo == 'Referencia Aleatoria', alt.value([5, 5]), alt.value([0])),
-                tooltip=['Modelo', 'FPR', 'TPR']
-            ).properties(width=900, height=500).interactive()
-            
-            st.altair_chart(roc_chart, use_container_width=True) 
-    else:
-        st.warning("Por favor, cargue el archivo histórico de calibración en la pestaña 2 para habilitar las opciones de auditoría.")
+            # Almacenamiento en memoria para persistencia visual completa
+            st.session_state['auditoria_lista'] = True
+            st.session_state['nuevo_umbral_calculado'] = nuevo_umbral
+            st.session_state['m_sensibilidad'] = sensibilidad
+            st.session_state['m_especificidad'] = especificidad
+            st.session_state['m_vpp'] = vpp
+            st.session_state['m_vpn'] = vpn
+            st.session_state['auc_lr'] = auc_lr
+            st.session_state['auc_xgb'] = auc_xgb
+            st.session_state['df_roc_data'] = df_roc
+
+    # Despliegue visual persistente de la Auditoría
+    if 'auditoria_lista' in st.session_state:
+        st.write("")
+        st.divider()
+        st.success(f"Punto de Corte Institucional fijado matemáticamente por Youden en: {st.session_state['nuevo_umbral_calculado']*100:.1f}%")
