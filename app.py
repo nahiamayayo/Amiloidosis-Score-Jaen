@@ -194,12 +194,8 @@ with tab1:
     if st.button("CALCULAR NIVEL DE RIESGO", use_container_width=True):
         if not st.session_state['modelo_entrenado']:
             st.error("Error: El Score Institucional no está configurado. Por favor, realice la calibración inicial de la matriz en la pestaña correspondiente.")
+     
         else:
-            parametros_ausentes = sum(1 for v in valores_extraidos.values() if v == 0.0)
-            
-            if parametros_ausentes > 2:
-                st.error(f"BLOQUEO DE SEGURIDAD CLÍNICA: Se han detectado {parametros_ausentes} parámetros ausentes. El protocolo exige un mínimo de 8 biomarcadores válidos sobre 10 para garantizar la precisión diagnóstica. Por favor, solicite una analítica más completa o revise la extracción manual.")
-            else:
                 datos_paciente = []
                 for col in st.session_state['columnas_jaen']:
                     val = valores_extraidos.get(col, 0.0)
@@ -209,44 +205,43 @@ with tab1:
                 X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
                 X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
                 
-                probabilidad = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
+                prob_lr = st.session_state['clf_lr'].predict_proba(X_scaled)[0][1]
+                prob_xgb = st.session_state['clf_xgb'].predict_proba(X_scaled)[0][1]
+                
                 umbral_clinico = st.session_state['umbral_jaen']
                 
                 st.markdown("---")
-                col_res1, col_res2 = st.columns([1, 2])
-                col_res1.metric("Probabilidad Predictiva", f"{probabilidad:.1%}")
+                st.markdown("### RESULTADOS DE ESTRATIFICACIÓN")
                 
-                with col_res2:
-                    if probabilidad >= umbral_clinico:
-                        st.error(f"ATENCIÓN CLÍNICA: RIESGO SIGNIFICATIVO. El perfil bioquímico supera el umbral de seguridad local fijado en {umbral_clinico:.1%}. Se recomienda derivación para valoración específica de Amiloidosis.")
-                        riesgo_texto = "ALTO RIESGO"
-                    else:
-                        st.success(f"VALORACIÓN: BAJO RIESGO CLÍNICO. La firma predictiva se mantiene por debajo del umbral de alarma institucional ({umbral_clinico:.1%}).")
-                        riesgo_texto = "BAJO RIESGO"
+                # Mostramos los dos resultados lado a lado
+                col_res1, col_res2 = st.columns(2)
+                col_res1.metric("Probabilidad (Modelo Lineal/LIS)", f"{prob_lr:.1%}")
+                col_res2.metric("Probabilidad (Modelo IA Avanzado)", f"{prob_xgb:.1%}")
+                
+                # Usamos la del XGBoost para la alerta clínica, ya que es más precisa
+                st.write("")
+                if prob_xgb >= umbral_clinico:
+                    st.error(f"ATENCIÓN CLÍNICA (IA Avanzada): RIESGO SIGNIFICATIVO. El perfil supera el umbral del {umbral_clinico:.1%}. Se recomienda derivación.")
+                    riesgo_texto = "ALTO RIESGO"
+                else:
+                    st.success(f"VALORACIÓN (IA Avanzada): BAJO RIESGO CLÍNICO. El perfil se mantiene por debajo del umbral del {umbral_clinico:.1%}.")
+                    riesgo_texto = "BAJO RIESGO"
                 
                 st.write("")
-                with st.expander("GENERAR INFORME DE ESTRATIFICACIÓN)"):
+                with st.expander("GENERAR INFORME DE ESTRATIFICACIÓN"):
                     informe = (
                         "========================================================\n"
                         "INFORME DE ESTRATIFICACIÓN - SCREENING AMILOIDOSIS JAÉN\n"
                         "========================================================\n\n"
-                        "RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):\n"
-                        f"- Probabilidad predictiva del algoritmo: {probabilidad:.1%}\n"
-                        f"- Punto de corte de seguridad (institucional): {umbral_clinico:.1%}\n"
-                        f"- CATEGORIZACIÓN DE RIESGO CLÍNICO: {riesgo_texto}\n\n"
-                        "PERFIL DE BIOMARCADORES DESTACADOS:\n"
+                        "RESULTADOS DEL ANÁLISIS DUAL:\n"
+                        f"- Probabilidad modelo Lineal (LIS): {prob_lr:.1%}\n"
+                        f"- Probabilidad modelo IA Avanzado (XGBoost): {prob_xgb:.1%}\n"
+                        f"- CATEGORIZACIÓN FINAL DE RIESGO: {riesgo_texto}\n\n"
+                        "PERFIL DE BIOMARCADORES:\n"
                         f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
-                        f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n"
-                        f"- Magnesio sérico: {valores_extraidos['Magnesio']} mg/dL\n\n"
-                        "* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando\n"
-                        "la firma bioquímica completa de 10 parámetros de rutina.\n"
-                        f"Se ha aplicado imputación estadística automatizada sobre {parametros_ausentes} valores\n"
-                        "ausentes en la analítica primaria (límite de seguridad: 2).\n\n"
-                        "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado\n"
-                        "puramente orientativa basada en probabilidad estadística.\n"
-                        "En ningún caso constituye un diagnóstico médico definitivo ni\n"
-                        "sustituye el juicio clínico del especialista o la realización\n"
-                        "de pruebas diagnósticas confirmatorias.\n"
+                        f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n\n"
+                        "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado orientativa.\n"
+                        "No constituye un diagnóstico definitivo ni sustituye el juicio clínico.\n"
                         "========================================================"
                     )
                     st.code(informe, language="text")
@@ -282,25 +277,19 @@ if os.path.exists(ruta_datos_locales) and st.session_state['X_jaen'] is None:
 # ==========================================
 # PESTAÑA 2: CALIBRACIÓN DEL MOTOR
 # ==========================================
-import xgboost as xgb # Asegúrate de importar xgboost al principio del archivo
-
 with tab2:
-    st.markdown("### CONFIGURACIÓN Y ENTRENAMIENTO DEL MOTOR")
+    st.markdown("### CONFIGURACIÓN Y ENTRENAMIENTO DEL MODELO")
     
-    # Aviso de seguridad clínico-administrativo
     st.markdown("""
-    <div style="background-color: #fffbeb; padding: 1rem; border-left: 4px solid #f59e0b; border-radius: 6px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-        <strong style="color: #b45309; font-size: 1.05em;">🔒 MÓDULO DE ACCESO RESTRINGIDO</strong><br>
-        <span style="color: #78350f; font-size: 0.95em;">Esta sección permite recalibrar la IA (arquitectura <b>XGBoost</b>) con nuevos datos históricos. 
-        Cualquier cambio actualizará la matriz de decisión institucional.</span>
-    </div>
-    """, unsafe_allow_html=True)
+    Esta sección permite actualizar la Inteligencia Artificial con nuevos datos históricos. 
+    Se ejecutan dos modelos: **Regresión Logística** (para la fórmula clínica del laboratorio) y **XGBoost** (para la predicción avanzada).
+    """)
 
     col_data1, col_data2 = st.columns([1.2, 1])
 
     with col_data1:
-        st.markdown("<h4 style='color: #334155;'>1. Actualización de Cohorte</h4>", unsafe_allow_html=True)
-        archivo_csv = st.file_uploader("Subir base de datos histórica (XLSX, CSV)", type=["xlsx", "csv"], label_visibility="collapsed")
+        st.markdown("#### 1. Actualización de Cohorte")
+        archivo_csv = st.file_uploader("Subir base de datos histórica (.xlsx / .csv)", type=["xlsx", "csv"], label_visibility="collapsed")
         
         if archivo_csv:
             df_subido = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
@@ -310,70 +299,63 @@ with tab2:
         
         if os.path.exists(ruta_datos_locales):
             st.success("✅ Cohorte histórica detectada y operativa.")
-        else:
-            st.warning("⚠️ No se ha detectado base de datos histórica.")
-
+    
     with col_data2:
-        st.markdown("<h4 style='color: #334155;'>2. Recalibración del Algoritmo</h4>", unsafe_allow_html=True)
-        st.info("El sistema reevaluará los pesos predictivos de los 10 biomarcadores bajo el modelo de ensambles XGBoost.")
-        
+        st.markdown("#### 2. Entrenamiento Dual")
         if st.session_state['X_jaen'] is not None:
-            if st.button("INICIAR ENTRENAMIENTO (XGBOOST)", use_container_width=True):
-                # Preprocesamiento
+            if st.button("INICIAR ENTRENAMIENTO HÍBRIDO", use_container_width=True):
+                # 1. Preparación de datos
                 imputer = SimpleImputer(strategy='median')
-                X_imp = imputer.fit_transform(st.session_state['X_jaen'])
                 scaler = StandardScaler()
+                X_imp = imputer.fit_transform(st.session_state['X_jaen'])
                 X_sca = scaler.fit_transform(X_imp)
                 
-                # Entrenamiento XGBoost
-                clf = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
-                clf.fit(X_sca, st.session_state['y_jaen'])
+                # 2. Entrenar Regresión Logística (Fórmula Laboratorio)
+                clf_lr = LogisticRegression(max_iter=2000, class_weight='balanced')
+                clf_lr.fit(X_sca, st.session_state['y_jaen'])
                 
-                # Guardado
+                # 3. Entrenar XGBoost (Precisión)
+                clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
+                clf_xgb.fit(X_sca, st.session_state['y_jaen'])
+                
+                # 4. Guardar
                 with open(ruta_modelo, 'wb') as archivo:
-                    pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': st.session_state['columnas_jaen']}, archivo)
+                    pickle.dump({'clf_lr': clf_lr, 'clf_xgb': clf_xgb, 'imputer': imputer, 'scaler': scaler, 'columnas': st.session_state['columnas_jaen']}, archivo)
                 
-                st.session_state.update({'modelo_entrenado': True, 'clf_jaen': clf, 'imputer_jaen': imputer, 'scaler_jaen': scaler})
-                st.success("Motor calibrado y matriz XGBoost persistida.")
+                st.session_state.update({'modelo_entrenado': True, 'clf_lr': clf_lr, 'clf_xgb': clf_xgb, 'imputer_jaen': imputer, 'scaler_jaen': scaler})
+                st.success("Modelos entrenados correctamente.")
 
-    # Visualización de importancia de variables
+    # --- ZONA DE VISUALIZACIÓN ---
     if st.session_state.get('modelo_entrenado'):
         st.divider()
-        st.markdown("#### PESO PREDICTIVO (IMPORTANCIA DE VARIABLES)")
         
-        clf = st.session_state['clf_jaen']
-        
-        # Comprobamos si el modelo es XGBoost o Regresión Lineal para extraer los datos correctamente
-        if hasattr(clf, 'feature_importances_'):
-            # Caso XGBoost
-            data_imp = pd.DataFrame({
-                'Biomarcador': st.session_state['columnas_jaen'],
-                'Importancia': clf.feature_importances_
-            }).sort_values(by='Importancia', ascending=False)
-            x_axis = 'Importancia'
-            title_text = 'Contribución al Modelo (Importancia)'
-        elif hasattr(clf, 'coef_'):
-            # Caso Regresión Lineal
-            data_imp = pd.DataFrame({
-                'Biomarcador': st.session_state['columnas_jaen'],
-                'Importancia': np.abs(clf.coef_[0]) # Usamos el valor absoluto del peso
-            }).sort_values(by='Importancia', ascending=False)
-            x_axis = 'Importancia'
-            title_text = 'Peso Absoluto de las Variables (Coeficientes)'
-        else:
-            st.error("El modelo cargado no es compatible con la visualización actual.")
-            data_imp = pd.DataFrame()
+        # A. FÓRMULA PARA LABORATORIO (Desplegable)
+        with st.expander("DETALLE TÉCNICO PARA LABORATORIO (Fórmula)", expanded=False):
+            st.markdown("Pesos para implementar en el sistema LIS (Regresión Logística):")
+            coefs = pd.DataFrame({
+                'Biomarcador': st.session_state['columnas_jaen'], 
+                'Peso (Coeficiente)': st.session_state['clf_lr'].coef_[0]
+            })
+            intercepto = st.session_state['clf_lr'].intercept_[0]
+            st.dataframe(coefs, use_container_width=True, hide_index=True)
+            st.write(f"**Intercepto (Beta 0):** {intercepto:.4f}")
+            st.markdown("`z = Intercepto + (Peso1*Val1) + ... + (Peson*Valn)`")
 
-        if not data_imp.empty:
-            st.dataframe(data_imp, use_container_width=True, hide_index=True)
-            
-            grafico = alt.Chart(data_imp).mark_bar(color='#3b5a2f').encode(
-                x=alt.X(f'{x_axis}:Q', title=title_text),
-                y=alt.Y('Biomarcador:N', sort='-x', title=''),
-                tooltip=['Biomarcador', x_axis]
-            ).properties(height=400).interactive()
-            
-            st.altair_chart(grafico, use_container_width=True)
+        # B. PESO PREDICTIVO (Gráfico XGBoost)
+        st.markdown("#### PESO PREDICTIVO (IMPORTANCIA DE VARIABLES - XGBOOST)")
+        data_imp = pd.DataFrame({
+            'Biomarcador': st.session_state['columnas_jaen'],
+            'Importancia': st.session_state['clf_xgb'].feature_importances_
+        }).sort_values(by='Importancia', ascending=False)
+        
+        grafico = alt.Chart(data_imp).mark_bar(color='#3b5a2f').encode(
+            x=alt.X('Importancia:Q', title='Contribución al Modelo'),
+            y=alt.Y('Biomarcador:N', sort='-x', title=''),
+            tooltip=['Biomarcador', 'Importancia']
+        ).properties(height=400).interactive()
+        
+        st.altair_chart(grafico, use_container_width=True)
+        
 # ==========================================
 # PESTAÑA 3: VALIDACIÓN Y RENDIMIENTO CLÍNICO
 # ==========================================
