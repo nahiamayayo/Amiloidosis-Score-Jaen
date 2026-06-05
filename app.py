@@ -210,18 +210,22 @@ with tab1:
                 umbral_clinico = st.session_state['umbral_jaen']
                 
                 st.markdown("---")
-                st.markdown("### RESULTADOS DE ESTRATIFICACIÓN")
+                st.markdown("### RESULTADO DE ESTRATIFICACIÓN")
                 
-                col_res1, col_res2 = st.columns(2)
-                col_res1.metric("Probabilidad (Modelo Lineal/LIS)", f"{prob_lr:.1%}")
-                col_res2.metric("Probabilidad (Modelo IA Avanzado)", f"{prob_xgb:.1%}")
+                # Mantenemos solo una columna para el Modelo Lineal (LIS)
+                col_res1 = st.columns(1)[0]
+                col_res1.metric("Probabilidad (Score Clínico)", f"{prob_lr:.1%}")
+                
+                # La línea de prob_xgb la mantenemos calculada para que el resto del 
+                # código (if/else siguiente) siga funcionando correctamente.
                 
                 st.write("")
+                # Usamos prob_xgb solo para la lógica de decisión, pero no mostramos el 1.4%
                 if prob_xgb >= umbral_clinico:
-                    st.error(f"ATENCIÓN CLÍNICA (IA Avanzada): RIESGO SIGNIFICATIVO. El perfil supera el umbral del {umbral_clinico*100:.1f}%. Se recomienda derivación.")
+                    st.error(f"ATENCIÓN CLÍNICA: RIESGO SIGNIFICATIVO detectado por IA. Se recomienda revisión del caso.")
                     riesgo_texto = "ALTO RIESGO"
                 else:
-                    st.success(f"VALORACIÓN (IA Avanzada): BAJO RIESGO CLÍNICO. El perfil se mantiene por debajo del umbral del {umbral_clinico*100:.1f}%.")
+                    st.success(f"VALORACIÓN: BAJO RIESGO CLÍNICO detectado por IA.")
                     riesgo_texto = "BAJO RIESGO"
                 
                 st.write("")
