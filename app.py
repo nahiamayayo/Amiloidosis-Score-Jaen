@@ -14,6 +14,14 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import pickle
+import os
+import re
+import pdfplumber
+
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(page_title="Screening Amiloidosis Jaén", layout="wide", initial_sidebar_state="collapsed")
 
@@ -233,7 +241,12 @@ with tab1:
                         "* NOTA TÉCNICA: La probabilidad ha sido calculada evaluando\n"
                         "la firma bioquímica completa de 10 parámetros de rutina.\n"
                         f"Se ha aplicado imputación estadística automatizada sobre {parametros_ausentes} valores\n"
-                        "ausentes en la analítica primaria (límite de seguridad: 2).\n"
+                        "ausentes en la analítica primaria (límite de seguridad: 2).\n\n"
+                        "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado\n"
+                        "puramente orientativa basada en probabilidad estadística.\n"
+                        "En ningún caso constituye un diagnóstico médico definitivo ni\n"
+                        "sustituye el juicio clínico del especialista o la realización\n"
+                        "de pruebas diagnósticas confirmatorias (ej. Gammagrafía).\n"
                         "========================================================"
                     )
                     st.code(informe, language="text")
