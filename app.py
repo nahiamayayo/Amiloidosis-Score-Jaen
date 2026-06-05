@@ -217,6 +217,14 @@ with tab1:
                 col_res2.metric("Probabilidad (Modelo IA Avanzado)", f"{prob_xgb:.1%}")
                 
                 st.write("")
+                if prob_xgb >= umbral_clinico:
+                    st.error(f"ATENCIÓN CLÍNICA (IA Avanzada): RIESGO SIGNIFICATIVO. El perfil supera el umbral del {umbral_clinico*100:.1f}%. Se recomienda derivación.")
+                    riesgo_texto = "ALTO RIESGO"
+                else:
+                    st.success(f"VALORACIÓN (IA Avanzada): BAJO RIESGO CLÍNICO. El perfil se mantiene por debajo del umbral del {umbral_clinico*100:.1f}%.")
+                    riesgo_texto = "BAJO RIESGO"
+                
+                st.write("")
                 with st.expander("GENERAR INFORME DE ESTRATIFICACIÓN"):
                     informe = (
                         "========================================================\n"
