@@ -183,7 +183,7 @@ with tab1:
 
     st.write("")
     with st.expander("VERIFICACIÓN DE PARÁMETROS", expanded=True):
-        st.info("💡 **Nota de seguridad:** Revise que los valores extraídos son correctos. Los valores en '0.0' indican ausencia de dato en la analítica primaria. El sistema ajustará el cálculo usando la media del hospital (máximo 2 variables faltantes permitidas).")
+        st.info("**Nota de seguridad:** Revise que los valores extraídos son correctos. Los valores en '0.0' indican ausencia de dato en la analítica primaria. El sistema ajustará el cálculo usando la media del hospital (máximo 2 variables faltantes permitidas).")
         cols = st.columns(2)
         for i, (k, v) in enumerate(valores_extraidos.items()):
             valores_extraidos[k] = cols[i % 2].number_input(k, value=float(v))
@@ -225,7 +225,7 @@ with tab1:
                         riesgo_texto = "BAJO RIESGO"
                 
                 st.write("")
-                with st.expander("GENERAR INFORME PARA HISTORIA CLÍNICA (DIRAYA)"):
+                with st.expander("GENERAR INFORME DE ESTRATIFICACIÓN)"):
                     informe = (
                         "========================================================\n"
                         "INFORME DE ESTRATIFICACIÓN - SCREENING AMILOIDOSIS JAÉN\n"
@@ -246,7 +246,7 @@ with tab1:
                         "puramente orientativa basada en probabilidad estadística.\n"
                         "En ningún caso constituye un diagnóstico médico definitivo ni\n"
                         "sustituye el juicio clínico del especialista o la realización\n"
-                        "de pruebas diagnósticas confirmatorias (ej. Gammagrafía).\n"
+                        "de pruebas diagnósticas confirmatorias.\n"
                         "========================================================"
                     )
                     st.code(informe, language="text")
@@ -282,81 +282,106 @@ if os.path.exists(ruta_datos_locales) and st.session_state['X_jaen'] is None:
 # ==========================================
 # PESTAÑA 2: CALIBRACIÓN DEL MOTOR
 # ==========================================
+import xgboost as xgb # Asegúrate de importar xgboost al principio del archivo
+
 with tab2:
-    st.markdown("### CALIBRACIÓN DEL MOTOR PREDICTIVO")
-    st.info("Módulo restringido para actualización de la matriz de pesos del modelo local mediante Regresión Logística Multivariante.")
+    st.markdown("### CONFIGURACIÓN Y ENTRENAMIENTO DEL MOTOR")
     
-    st.markdown("#### Carga de archivos de cohorte")
-    archivo_csv = st.file_uploader("Cargar Base de Datos Histórica (.xlsx / .csv)", type=["xlsx", "csv"], label_visibility="collapsed")
-    
-    if archivo_csv:
-        df_subido = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
-        df_subido.to_csv(ruta_datos_locales, index=False)
-        procesar_y_guardar_dataframe(df_subido)
-        st.toast("Base de datos almacenada correctamente en el sistema local.")
-    elif st.session_state['X_jaen'] is not None:
-        st.caption("Información del sistema: Se ha detectado una cohorte histórica guardada en disco. No es necesario volver a subir el archivo.")
+    # Aviso de seguridad clínico-administrativo
+    st.markdown("""
+    <div style="background-color: #fffbeb; padding: 1rem; border-left: 4px solid #f59e0b; border-radius: 6px; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <strong style="color: #b45309; font-size: 1.05em;">🔒 MÓDULO DE ACCESO RESTRINGIDO</strong><br>
+        <span style="color: #78350f; font-size: 0.95em;">Esta sección permite recalibrar la IA (arquitectura <b>XGBoost</b>) con nuevos datos históricos. 
+        Cualquier cambio actualizará la matriz de decisión institucional.</span>
+    </div>
+    """, unsafe_allow_html=True)
 
-    if st.session_state['X_jaen'] is not None:
-        if st.button("INICIAR CALIBRACIÓN INSTITUCIONAL", use_container_width=True):
-            imputer = SimpleImputer(strategy='median')
-            X_imp = imputer.fit_transform(st.session_state['X_jaen'])
-            scaler = StandardScaler()
-            X_sca = scaler.fit_transform(X_imp)
-            
-            clf = LogisticRegression(max_iter=2000, class_weight='balanced')
-            clf.fit(X_sca, st.session_state['y_jaen'])
-            
-            umbral_actual = st.session_state.get('umbral_jaen', 0.522)
-            
-            with open(ruta_modelo, 'wb') as archivo:
-                pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': st.session_state['columnas_jaen'], 'umbral': umbral_actual}, archivo)
+    col_data1, col_data2 = st.columns([1.2, 1])
+
+    with col_data1:
+        st.markdown("<h4 style='color: #334155;'>1. Actualización de Cohorte</h4>", unsafe_allow_html=True)
+        archivo_csv = st.file_uploader("Subir base de datos histórica (XLSX, CSV)", type=["xlsx", "csv"], label_visibility="collapsed")
+        
+        if archivo_csv:
+            df_subido = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
+            df_subido.to_csv(ruta_datos_locales, index=False)
+            procesar_y_guardar_dataframe(df_subido)
+            st.toast("Base de datos actualizada.")
+        
+        if os.path.exists(ruta_datos_locales):
+            st.success("✅ Cohorte histórica detectada y operativa.")
+        else:
+            st.warning("⚠️ No se ha detectado base de datos histórica.")
+
+    with col_data2:
+        st.markdown("<h4 style='color: #334155;'>2. Recalibración del Algoritmo</h4>", unsafe_allow_html=True)
+        st.info("El sistema reevaluará los pesos predictivos de los 10 biomarcadores bajo el modelo de ensambles XGBoost.")
+        
+        if st.session_state['X_jaen'] is not None:
+            if st.button("INICIAR ENTRENAMIENTO (XGBOOST)", use_container_width=True):
+                # Preprocesamiento
+                imputer = SimpleImputer(strategy='median')
+                X_imp = imputer.fit_transform(st.session_state['X_jaen'])
+                scaler = StandardScaler()
+                X_sca = scaler.fit_transform(X_imp)
                 
-            df_coef = pd.DataFrame({
-                'Biomarcador': st.session_state['columnas_jaen'], 
-                'Coeficiente (Peso matemático)': np.round(clf.coef_[0], 4)
-            }).sort_values(by='Coeficiente (Peso matemático)', ascending=False)
-            
-            st.session_state['df_coef_jaen'] = df_coef
-            st.session_state['modelo_entrenado'] = True
-            st.session_state['clf_jaen'] = clf
-            st.session_state['imputer_jaen'] = imputer
-            st.session_state['scaler_jaen'] = scaler
-            
-            st.success("Operación completada: Motor predictivo calibrado y matriz de pesos persistida.")
+                # Entrenamiento XGBoost
+                clf = xgb.XGBClassifier(use_label_encoder=False, eval_metric='logloss')
+                clf.fit(X_sca, st.session_state['y_jaen'])
+                
+                # Guardado
+                with open(ruta_modelo, 'wb') as archivo:
+                    pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': st.session_state['columnas_jaen']}, archivo)
+                
+                st.session_state.update({'modelo_entrenado': True, 'clf_jaen': clf, 'imputer_jaen': imputer, 'scaler_jaen': scaler})
+                st.success("Motor calibrado y matriz XGBoost persistida.")
 
-    # Renderizado Vertical Óptimo
-    if 'df_coef_jaen' in st.session_state:
-        st.write("")
+    # Visualización de importancia de variables (Feature Importance)
+    if st.session_state.get('modelo_entrenado'):
         st.divider()
+        st.markdown("#### PESO PREDICTIVO (IMPORTANCIA DE VARIABLES)")
         
-        st.markdown("#### TABLA DE COEFICIENTES")
-        st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>Pesos numéricos exactos calculados para la ecuación Logit de Jaén.</p>", unsafe_allow_html=True)
-        st.dataframe(st.session_state['df_coef_jaen'], use_container_width=True, hide_index=True)
+        # XGBoost nos da 'feature_importances_' en lugar de 'coef_'
+        importancias = pd.DataFrame({
+            'Biomarcador': st.session_state['columnas_jaen'],
+            'Importancia': st.session_state['clf_jaen'].feature_importances_
+        }).sort_values(by='Importancia', ascending=False)
         
-        st.write("")
-        st.markdown("#### IMPACTO PARAMÉTRICO EN EL RIESGO CLÍNICO")
-        st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>En verde se representan los factores de riesgo (suman al score); en rojo los factores protectores (restan).</p>", unsafe_allow_html=True)
+        st.dataframe(importancias, use_container_width=True, hide_index=True)
         
-        # COLOR ACTUALIZADO: Verde Oliva SAS vs Rojo Fisiológico
-        grafico = alt.Chart(st.session_state['df_coef_jaen']).mark_bar().encode(
-            x=alt.X('Coeficiente (Peso matemático):Q', title='Peso Predictivo (Regresión Logística)'),
-            y=alt.Y('Biomarcador:N', sort='x', title=''), 
-            color=alt.condition(alt.datum['Coeficiente (Peso matemático)'] > 0, alt.value('#3b5a2f'), alt.value('#b91c1c')),
-            tooltip=['Biomarcador', 'Coeficiente (Peso matemático)']
+        grafico = alt.Chart(importancias).mark_bar(color='#3b5a2f').encode(
+            x=alt.X('Importancia:Q', title='Contribución al Modelo'),
+            y=alt.Y('Biomarcador:N', sort='-x', title=''),
+            tooltip=['Biomarcador', 'Importancia']
         ).properties(height=400).interactive()
         
         st.altair_chart(grafico, use_container_width=True)
+        
+# ==========================================
+# PESTAÑA 3: VALIDACIÓN Y RENDIMIENTO CLÍNICO
+# ==========================================
+import altair as alt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import roc_curve, auc, confusion_matrix
+from xgboost import XGBClassifier
 
-# ==========================================
-# PESTAÑA 3: AUDITORÍA E INFORMES (PERSISTENTE Y COLORES INSTITUCIONALES)
-# ==========================================
 with tab3:
-    st.markdown("### AUDITORÍA CLÍNICA Y OPTIMIZACIÓN DE UMBRAL")
-    st.info("Módulo de validación interna (Hold-out 75/25). Calcula el Área Bajo la Curva (AUC) y determina la efectividad clínica mediante métricas de rendimiento basadas en el umbral local.")
+    st.markdown("### VALIDACIÓN Y RENDIMIENTO CLÍNICO")
+    
+    # Caja de descripción técnica
+    st.markdown("""
+    <div style="background-color: #f1f5f9; padding: 1rem; border-radius: 8px; border-left: 4px solid #3b5a2f; margin-bottom: 2rem;">
+        <h4 style="margin-top: 0; color: #334155;">Auditoría de fiabilidad (Hold-out 75/25)</h4>
+        <p style="color: #475569;">Este módulo valida el modelo predictivo mediante una separación estricta de datos (training/test). Calcula el AUC y optimiza el punto de corte (Umbral de Youden) para garantizar la máxima seguridad en la detección de casos.</p>
+    </div>
+    """, unsafe_allow_html=True)
     
     if st.session_state['X_jaen'] is not None:
-        if st.button("GENERAR INFORME DE AUDITORÍA Y ACTUALIZAR UMBRAL", use_container_width=True):
+        if st.button("GENERAR INFORME DE VALIDACIÓN Y RECALIBRAR UMBRAL", use_container_width=True):
+            # ... (Toda tu lógica de cálculo permanece intacta) ...
             X_train, X_test, y_train, y_test = train_test_split(
                 st.session_state['X_jaen'], st.session_state['y_jaen'], 
                 test_size=0.25, random_state=42, stratify=st.session_state['y_jaen']
@@ -367,7 +392,7 @@ with tab3:
             X_train_sca = sca_val.fit_transform(imp_val.fit_transform(X_train))
             X_test_sca = sca_val.transform(imp_val.transform(X_test))
             
-            # Evaluación del modelo lineal de regresión
+            # Evaluación del modelo lineal
             clf_lr = LogisticRegression(max_iter=2000, class_weight='balanced')
             clf_lr.fit(X_train_sca, y_train)
             y_pred_prob_lr = clf_lr.predict_proba(X_test_sca)[:, 1]
@@ -384,7 +409,7 @@ with tab3:
                 d['umbral'] = nuevo_umbral
                 with open(ruta_modelo, 'wb') as archivo: pickle.dump(d, archivo)
             
-            # Evaluación de la arquitectura avanzada XGBoost
+            # Evaluación XGBoost
             scale_pos_weight = (len(y_train) - sum(y_train)) / sum(y_train) if sum(y_train) > 0 else 1
             clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
             clf_xgb.fit(X_train_sca, y_train)
@@ -392,65 +417,44 @@ with tab3:
             fpr_xgb, tpr_xgb, _ = roc_curve(y_test, y_pred_prob_xgb)
             auc_xgb = auc(fpr_xgb, tpr_xgb)
             
-            # Procesamiento de la Matriz de Confusión diagnóstica
             y_pred_binario = (y_pred_prob_lr >= nuevo_umbral).astype(int)
             tn, fp, fn, tp = confusion_matrix(y_test, y_pred_binario).ravel()
             
-            sensibilidad = tp / (tp + fn) if (tp + fn) > 0 else 0
-            especificidad = tn / (tn + fp) if (tn + fp) > 0 else 0
-            vpp = tp / (tp + fp) if (tp + fp) > 0 else 0
-            vpn = tn / (tn + fn) if (tn + fn) > 0 else 0
-            
-            # Datos ROC unificados
-            df_lr = pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Regresion Lineal (AUC = {auc_lr:.3f})'})
-            df_xgb = pd.DataFrame({'FPR': fpr_xgb, 'TPR': tpr_xgb, 'Modelo': f'XGBoost Avanzado (AUC = {auc_xgb:.3f})'})
-            df_ref = pd.DataFrame({'FPR': [0, 1], 'TPR': [0, 1], 'Modelo': 'Referencia Aleatoria'})
-            df_roc = pd.concat([df_lr, df_xgb, df_ref])
-            
-            # Volcado al estado de sesión
-            st.session_state['auditoria_lista'] = True
-            st.session_state['nuevo_umbral_calculado'] = nuevo_umbral
-            st.session_state['m_sensibilidad'] = sensibilidad
-            st.session_state['m_especificidad'] = especificidad
-            st.session_state['m_vpp'] = vpp
-            st.session_state['m_vpn'] = vpn
-            st.session_state['auc_lr'] = auc_lr
-            st.session_state['auc_xgb'] = auc_xgb
-            st.session_state['df_roc_data'] = df_roc
+            st.session_state.update({
+                'auditoria_lista': True, 'nuevo_umbral_calculado': nuevo_umbral,
+                'm_sensibilidad': tp / (tp + fn) if (tp + fn) > 0 else 0,
+                'm_especificidad': tn / (tn + fp) if (tn + fp) > 0 else 0,
+                'm_vpp': tp / (tp + fp) if (tp + fp) > 0 else 0,
+                'm_vpn': tn / (tn + fn) if (tn + fn) > 0 else 0,
+                'auc_lr': auc_lr, 'auc_xgb': auc_xgb,
+                'df_roc_data': pd.concat([
+                    pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Lineal (AUC={auc_lr:.3f})'}),
+                    pd.DataFrame({'FPR': fpr_xgb, 'TPR': tpr_xgb, 'Modelo': f'XGBoost (AUC={auc_xgb:.3f})'})
+                ])
+            })
+            st.rerun() # Refresca para mostrar los resultados
 
-    # Bloque de visualización permanente de la auditoría
+    # Visualización de resultados
     if 'auditoria_lista' in st.session_state:
-        st.write("")
-        st.divider()
-        st.success(f"Punto de Corte Institucional fijado matemáticamente por Youden en: {st.session_state['nuevo_umbral_calculado']*100:.1f}%")
+        st.success(f"Punto de corte óptimo (Youden): **{st.session_state['nuevo_umbral_calculado']*100:.1f}%**")
         
-        st.markdown("#### MATRIZ DE RENDIMIENTO DIAGNÓSTICO (Umbral Optimizado)")
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-        m_col1.metric("Sensibilidad (Detección)", f"{st.session_state['m_sensibilidad']:.1%}", help="Capacidad del sistema para capturar enfermos reales.")
-        m_col2.metric("Especificidad (Discriminación)", f"{st.session_state['m_especificidad']:.1%}", help="Capacidad del sistema para descartar falsos positivos.")
-        m_col3.metric("Valor Predictivo Positivo (VPP)", f"{st.session_state['m_vpp']:.1%}", help="Probabilidad de estar enfermo ante una alerta positiva.")
-        m_col4.metric("Valor Predictivo Negativo (VPN)", f"{st.session_state['m_vpn']:.1%}", help="Seguridad clínica ante una alerta de bajo riesgo.")
+        st.markdown("#### MÉTRICAS DE EFECTIVIDAD CLÍNICA")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Sensibilidad", f"{st.session_state['m_sensibilidad']:.1%}", help="Capacidad para detectar enfermos (evita falsos negativos).")
+        c2.metric("Especificidad", f"{st.session_state['m_especificidad']:.1%}", help="Capacidad para descartar sanos (evita falsos positivos).")
+        c3.metric("VPP", f"{st.session_state['m_vpp']:.1%}", help="Probabilidad de enfermedad tras una alerta positiva.")
+        c4.metric("VPN", f"{st.session_state['m_vpn']:.1%}", help="Seguridad clínica ante un resultado bajo riesgo.")
         
         st.markdown("---")
-        st.markdown("#### CURVAS ROC COMPARATIVAS DE MODELOS")
+        st.markdown("#### COMPARATIVA DE RENDIMIENTO (AUC)")
         
-        col_m1, col_m2 = st.columns(2)
-        col_m1.metric("Poder Predictivo Lineal (AUC)", f"{st.session_state['auc_lr']:.3f}")
-        col_m2.metric("Poder Predictivo XGBoost (AUC)", f"{st.session_state['auc_xgb']:.3f}")
-        
-        # COLOR ACTUALIZADO EN ROC: Verde Oliva (Lineal), Verde SAS (XGBoost) y Slate (Referencia)
         roc_chart = alt.Chart(st.session_state['df_roc_data']).mark_line(size=3).encode(
-            x=alt.X('FPR:Q', title='Tasa de Falsos Positivos (1 - Especificidad)'),
-            y=alt.Y('TPR:Q', title='Tasa de Verdaderos Positivos (Sensibilidad)'),
-            color=alt.Color('Modelo:N', scale=alt.Scale(
-                domain=[f"Regresion Lineal (AUC = {st.session_state['auc_lr']:.3f})", f"XGBoost Avanzado (AUC = {st.session_state['auc_xgb']:.3f})", 'Referencia Aleatoria'],
-                range=['#3b5a2f', '#008f4c', '#94a3b8']
-            ), legend=alt.Legend(title="Algoritmo Predictivo", orient='bottom-right')),
-            strokeDash=alt.condition(alt.datum.Modelo == 'Referencia Aleatoria', alt.value([5, 5]), alt.value([0])),
-            tooltip=['Modelo', 'FPR', 'TPR']
-        ).properties(height=480).interactive()
-        
+            x=alt.X('FPR', title='Tasa de Falsos Positivos'),
+            y=alt.Y('TPR', title='Tasa de Verdaderos Positivos'),
+            color=alt.Color('Modelo', scale=alt.Scale(range=['#94a3b8', '#008f4c']))
+        ).properties(height=350).interactive()
         st.altair_chart(roc_chart, use_container_width=True)
+        
+        st.warning("**AVISO LEGAL:** Esta validación es de uso interno institucional. La capacidad predictiva del modelo es orientativa y no sustituye el juicio clínico del especialista. La responsabilidad final del diagnóstico recae sobre el facultativo.")
     else:
-        if st.session_state['X_jaen'] is None:
-            st.warning("Por favor, cargue el archivo histórico de calibración en la pestaña 2 para habilitar las opciones de auditoría de la cohorte.")
+        st.warning("Cargue la base de datos histórica en la Pestaña 2 para activar el motor de validación.")
