@@ -237,11 +237,8 @@ with tab1:
                         "========================================================\n\n"
                         "RESULTADOS DEL ANÁLISIS DUAL:\n"
                         f"- Probabilidad modelo Lineal (LIS): {prob_lr:.1%}\n"
-                        f"- Probabilidad modelo IA Avanzado (XGBoost): {prob_xgb:.1%}\n"
                         f"- CATEGORIZACIÓN FINAL DE RIESGO: {riesgo_texto}\n\n"
-                        "PERFIL DE BIOMARCADORES:\n"
-                        f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
-                        f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n\n"
+                        
                         "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado orientativa.\n"
                         "No constituye un diagnóstico definitivo ni sustituye el juicio clínico.\n"
                         "========================================================"
