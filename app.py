@@ -186,53 +186,62 @@ with tab1:
             st.error("Error: El Score Institucional no está completamente configurado. Por favor, realice la calibración inicial de la matriz en la pestaña 'CALIBRACIÓN DEL MOTOR' para activar ambos modelos.")
         else:
             datos_paciente = []
+            valores_faltantes = 0
+            
+            # Contamos los valores faltantes mientras preparamos el array
             for col in st.session_state['columnas_jaen']:
                 val = valores_extraidos.get(col, 0.0)
+                if val == 0.0:
+                    valores_faltantes += 1
                 datos_paciente.append(np.nan if val == 0.0 else val)
             
-            X_paciente = np.array(datos_paciente).reshape(1, -1)
-            X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
-            X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
-            
-            # Ejecución Dual de Predicciones
-            prob_lr = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
-            prob_xgb = st.session_state['clf_xgb'].predict_proba(X_scaled)[0][1]
-            
-            umbral_clinico = st.session_state['umbral_jaen']
-            
-            st.markdown("---")
-            st.markdown("### RESULTADOS DE ESTRATIFICACIÓN")
-            
-            col_res1, col_res2 = st.columns(2)
-            col_res1.metric("Probabilidad (Modelo Lineal/LIS)", f"{prob_lr:.1%}")
-            col_res2.metric("Probabilidad (Modelo IA Avanzado)", f"{prob_xgb:.1%}")
-            
-            st.write("")
-            if prob_xgb >= umbral_clinico:
-                st.error(f"ATENCIÓN CLÍNICA (IA Avanzada): RIESGO SIGNIFICATIVO. El perfil supera el umbral del {umbral_clinico:.1%}. Se recomienda derivación.")
-                riesgo_texto = "ALTO RIESGO"
+            # --- FILTRO ESTRICTO DE SEGURIDAD ---
+            if valores_faltantes > 2:
+                st.error(f"❌ ATENCIÓN CLÍNICA: Faltan {valores_faltantes} parámetros en la analítica. Para garantizar la seguridad del diagnóstico y evitar discrepancias entre los motores predictivos, el sistema exige un máximo de 2 variables ausentes. Por favor, complete los datos manualmente en la sección superior.")
             else:
-                st.success(f"VALORACIÓN (IA Avanzada): BAJO RIESGO CLÍNICO. El perfil se mantiene por debajo del umbral del {umbral_clinico:.1%}.")
-                riesgo_texto = "BAJO RIESGO"
-            
-            st.write("")
-            with st.expander("GENERAR INFORME DE ESTRATIFICACIÓN"):
-                informe = (
-                    "========================================================\n"
-                    "INFORME DE ESTRATIFICACIÓN - SCREENING AMILOIDOSIS JAÉN\n"
-                    "========================================================\n\n"
-                    "RESULTADOS DEL ANÁLISIS DUAL:\n"
-                    f"- Probabilidad modelo Lineal (LIS): {prob_lr:.1%}\n"
-                    f"- Probabilidad modelo IA Avanzado (XGBoost): {prob_xgb:.1%}\n"
-                    f"- CATEGORIZACIÓN FINAL DE RIESGO: {riesgo_texto}\n\n"
-                    "PERFIL DE BIOMARCADORES:\n"
-                    f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
-                    f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n\n"
-                    "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado orientativa.\n"
-                    "No constituye un diagnóstico definitivo ni sustituye el juicio clínico.\n"
-                    "========================================================"
-                )
-                st.code(informe, language="text")
+                X_paciente = np.array(datos_paciente).reshape(1, -1)
+                X_imputed = st.session_state['imputer_jaen'].transform(X_paciente)
+                X_scaled = st.session_state['scaler_jaen'].transform(X_imputed)
+                
+                # Ejecución Dual de Predicciones
+                prob_lr = st.session_state['clf_jaen'].predict_proba(X_scaled)[0][1]
+                prob_xgb = st.session_state['clf_xgb'].predict_proba(X_scaled)[0][1]
+                
+                umbral_clinico = st.session_state['umbral_jaen']
+                
+                st.markdown("---")
+                st.markdown("### RESULTADOS DE ESTRATIFICACIÓN")
+                
+                col_res1, col_res2 = st.columns(2)
+                col_res1.metric("Probabilidad (Modelo Lineal/LIS)", f"{prob_lr:.1%}")
+                col_res2.metric("Probabilidad (Modelo IA Avanzado)", f"{prob_xgb:.1%}")
+                
+                st.write("")
+                if prob_xgb >= umbral_clinico:
+                    st.error(f"ATENCIÓN CLÍNICA (IA Avanzada): RIESGO SIGNIFICATIVO. El perfil supera el umbral del {umbral_clinico*100:.1f}%. Se recomienda derivación.")
+                    riesgo_texto = "ALTO RIESGO"
+                else:
+                    st.success(f"VALORACIÓN (IA Avanzada): BAJO RIESGO CLÍNICO. El perfil se mantiene por debajo del umbral del {umbral_clinico*100:.1f}%.")
+                    riesgo_texto = "BAJO RIESGO"
+                
+                st.write("")
+                with st.expander("GENERAR INFORME DE ESTRATIFICACIÓN"):
+                    informe = (
+                        "========================================================\n"
+                        "INFORME DE ESTRATIFICACIÓN - SCREENING AMILOIDOSIS JAÉN\n"
+                        "========================================================\n\n"
+                        "RESULTADOS DEL ANÁLISIS DUAL:\n"
+                        f"- Probabilidad modelo Lineal (LIS): {prob_lr:.1%}\n"
+                        f"- Probabilidad modelo IA Avanzado (XGBoost): {prob_xgb:.1%}\n"
+                        f"- CATEGORIZACIÓN FINAL DE RIESGO: {riesgo_texto}\n\n"
+                        "PERFIL DE BIOMARCADORES:\n"
+                        f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
+                        f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n\n"
+                        "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado orientativa.\n"
+                        "No constituye un diagnóstico definitivo ni sustituye el juicio clínico.\n"
+                        "========================================================"
+                    )
+                    st.code(informe, language="text")
 
 # ==========================================
 # AUXILIAR: LOGICA DE PERSISTENCIA DE COHORTE
