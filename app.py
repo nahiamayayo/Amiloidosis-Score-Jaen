@@ -336,27 +336,44 @@ with tab2:
                 st.session_state.update({'modelo_entrenado': True, 'clf_jaen': clf, 'imputer_jaen': imputer, 'scaler_jaen': scaler})
                 st.success("Motor calibrado y matriz XGBoost persistida.")
 
-    # Visualización de importancia de variables (Feature Importance)
+    # Visualización de importancia de variables
     if st.session_state.get('modelo_entrenado'):
         st.divider()
         st.markdown("#### PESO PREDICTIVO (IMPORTANCIA DE VARIABLES)")
         
-        # XGBoost nos da 'feature_importances_' en lugar de 'coef_'
-        importancias = pd.DataFrame({
-            'Biomarcador': st.session_state['columnas_jaen'],
-            'Importancia': st.session_state['clf_jaen'].feature_importances_
-        }).sort_values(by='Importancia', ascending=False)
+        clf = st.session_state['clf_jaen']
         
-        st.dataframe(importancias, use_container_width=True, hide_index=True)
-        
-        grafico = alt.Chart(importancias).mark_bar(color='#3b5a2f').encode(
-            x=alt.X('Importancia:Q', title='Contribución al Modelo'),
-            y=alt.Y('Biomarcador:N', sort='-x', title=''),
-            tooltip=['Biomarcador', 'Importancia']
-        ).properties(height=400).interactive()
-        
-        st.altair_chart(grafico, use_container_width=True)
-        
+        # Comprobamos si el modelo es XGBoost o Regresión Lineal para extraer los datos correctamente
+        if hasattr(clf, 'feature_importances_'):
+            # Caso XGBoost
+            data_imp = pd.DataFrame({
+                'Biomarcador': st.session_state['columnas_jaen'],
+                'Importancia': clf.feature_importances_
+            }).sort_values(by='Importancia', ascending=False)
+            x_axis = 'Importancia'
+            title_text = 'Contribución al Modelo (Importancia)'
+        elif hasattr(clf, 'coef_'):
+            # Caso Regresión Lineal
+            data_imp = pd.DataFrame({
+                'Biomarcador': st.session_state['columnas_jaen'],
+                'Importancia': np.abs(clf.coef_[0]) # Usamos el valor absoluto del peso
+            }).sort_values(by='Importancia', ascending=False)
+            x_axis = 'Importancia'
+            title_text = 'Peso Absoluto de las Variables (Coeficientes)'
+        else:
+            st.error("El modelo cargado no es compatible con la visualización actual.")
+            data_imp = pd.DataFrame()
+
+        if not data_imp.empty:
+            st.dataframe(data_imp, use_container_width=True, hide_index=True)
+            
+            grafico = alt.Chart(data_imp).mark_bar(color='#3b5a2f').encode(
+                x=alt.X(f'{x_axis}:Q', title=title_text),
+                y=alt.Y('Biomarcador:N', sort='-x', title=''),
+                tooltip=['Biomarcador', x_axis]
+            ).properties(height=400).interactive()
+            
+            st.altair_chart(grafico, use_container_width=True)
 # ==========================================
 # PESTAÑA 3: VALIDACIÓN Y RENDIMIENTO CLÍNICO
 # ==========================================
