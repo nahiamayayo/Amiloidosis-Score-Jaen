@@ -14,8 +14,16 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import pickle
+import os
+import re
+import pdfplumber
+
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
-st.set_page_config(page_title="Protocolo CardioGen Jaén", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="Screening Amiloidosis Jaén", layout="wide", initial_sidebar_state="collapsed")
 
 ruta_modelo = 'modelo_jaen.pkl'
 ruta_datos_locales = 'datos_historicos_hospital.csv'
@@ -53,7 +61,6 @@ def limpiar_valor_para_entrenamiento(val):
     except: return np.nan
 
 # --- 2. ESTILOS VISUALES INSTITUCIONALES (VERDE ANDALUZ Y OLIVA) ---
-# Hemos seleccionado los códigos hexadecimales exactos de la Junta de Andalucía
 st.markdown("""
 <style>
     /* Fondo general */
@@ -108,7 +115,7 @@ header_col1, header_col2 = st.columns([1.2, 6], vertical_alignment="center")
 with header_col1:
     if os.path.exists("huj.png"): st.image("huj.png", use_container_width=True) 
 with header_col2:
-    st.title("PROTOCOLO CARDIOGEN JAÉN")
+    st.title("SCREENING AMILOIDOSIS JAÉN")
     st.markdown("<p style='color: #64748b; font-size: 1.15rem; margin-top: -10px; font-weight: 500;'>PLATAFORMA ALGORÍTMICA DE CRIBADO INSTITUCIONAL</p>", unsafe_allow_html=True)
 
 st.divider()
@@ -119,8 +126,8 @@ tab1, tab2, tab3 = st.tabs(["EVALUACIÓN CLÍNICA", "CALIBRACIÓN DEL MOTOR", "A
 # PESTAÑA 1: EVALUACIÓN EN CONSULTA
 # ==========================================
 with tab1:
-    st.markdown("### 1. EXTRACCIÓN DE DATOS CLÍNICOS (LABORATORIO)")
-    pdf_subido = st.file_uploader("Subir analítica del SAS (Formato PDF)", type=["pdf"], label_visibility="collapsed")
+    st.markdown("### 1. CARGA DE ANALÍTICA (PDF)")
+    pdf_subido = st.file_uploader("Arrastre el archivo PDF o haga clic para subir la analítica del SAS", type=["pdf"], label_visibility="collapsed")
     valores_extraidos = {k: 0.0 for k in st.session_state['columnas_jaen']}
     
     if pdf_subido is not None:
@@ -147,16 +154,17 @@ with tab1:
                 st.success("Extracción digital completada con éxito.")
         except Exception as e: st.error(f"Error procesando documento PDF: {e}")
 
-    with st.expander("REVISIÓN MANUAL DE VALORES EXTRAÍDOS", expanded=True):
-        st.info("Nota del sistema: Los valores en '0.0' indican ausencia de dato en la analítica primaria. El modelo aplicará imputación estadística automatizada (máximo 2 variables permitidas).")
+    st.write("")
+    with st.expander("2. VERIFICACIÓN DE PARÁMETROS", expanded=True):
+        st.info("💡 **Nota de seguridad:** Revise que los valores extraídos son correctos. Los valores en '0.0' indican ausencia de dato en la analítica primaria. El sistema ajustará el cálculo usando la media del hospital (máximo 2 variables faltantes permitidas).")
         cols = st.columns(2)
         for i, (k, v) in enumerate(valores_extraidos.items()):
             valores_extraidos[k] = cols[i % 2].number_input(k, value=float(v))
     
     st.write("")
-    st.markdown("### 2. MOTOR PREDICTIVO MULTIVARIANTE")
+    st.markdown("### 3. ANÁLISIS Y TRIAJE")
     
-    if st.button("EJECUTAR PROTOCOLO DE ESTRATIFICACIÓN", use_container_width=True):
+    if st.button("CALCULAR NIVEL DE RIESGO", use_container_width=True):
         if not st.session_state['modelo_entrenado']:
             st.error("Error: El Score Institucional no está configurado. Por favor, realice la calibración inicial de la matriz en la pestaña correspondiente.")
         else:
@@ -193,7 +201,7 @@ with tab1:
                 with st.expander("GENERAR INFORME PARA HISTORIA CLÍNICA (DIRAYA)"):
                     informe = (
                         "========================================================\n"
-                        "INFORME DE ESTRATIFICACIÓN - PROTOCOLO CARDIOGEN JAÉN\n"
+                        "INFORME DE ESTRATIFICACIÓN - SCREENING AMILOIDOSIS JAÉN\n"
                         "========================================================\n\n"
                         "RESULTADO DEL ANÁLISIS MULTIVARIANTE (MACHINE LEARNING):\n"
                         f"- Probabilidad predictiva del algoritmo: {probabilidad:.1%}\n"
