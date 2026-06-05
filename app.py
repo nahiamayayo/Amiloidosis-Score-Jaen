@@ -182,7 +182,6 @@ with tab1:
     st.markdown("### ESTRATIFICACIÓN DE RIESGO")
     
     if st.button("CALCULAR NIVEL DE RIESGO", use_container_width=True):
-        # Validación de que el motor dual esté correctamente configurado en el sistema
         if not st.session_state['modelo_entrenado'] or st.session_state.get('clf_xgb') is None:
             st.error("Error: El Score Institucional no está completamente configurado. Por favor, realice la calibración inicial de la matriz en la pestaña 'CALIBRACIÓN DEL MOTOR' para activar ambos modelos.")
         else:
@@ -267,87 +266,115 @@ if os.path.exists(ruta_datos_locales) and st.session_state['X_jaen'] is None:
 # ==========================================
 with tab2:
     st.markdown("### CALIBRACIÓN DEL MOTOR PREDICTIVO DUAL")
-    st.info("Módulo restringido para actualización de la matriz de pesos del modelo local mediante Regresión Logística y XGBoost.")
     
-    st.markdown("#### Carga de archivos de cohorte")
-    archivo_csv = st.file_uploader("Cargar Base de Datos Histórica (.xlsx / .csv)", type=["xlsx", "csv"], label_visibility="collapsed")
+    st.warning("⚠️ **ZONA TÉCNICA AVANZADA:** Este módulo reconfigura la matriz matemática del modelo para todo el hospital. Se recomienda su uso exclusivo al equipo técnico o dirección del laboratorio.")
+    desbloqueo_calibracion = st.checkbox("Entiendo las implicaciones. Desbloquear módulo de calibración.")
+    
+    if desbloqueo_calibracion:
+        st.markdown("#### Carga de archivos de cohorte")
+        archivo_csv = st.file_uploader("Cargar Base de Datos Histórica (.xlsx / .csv)", type=["xlsx", "csv"], label_visibility="collapsed")
 
-    if archivo_csv:
-        df_subido = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
-        df_subido.to_csv(ruta_datos_locales, index=False)
-        procesar_y_guardar_dataframe(df_subido)
-        st.toast("Base de datos almacenada correctamente en el sistema local.")
-        
-    elif st.session_state['X_jaen'] is not None:
-        st.caption("Información del sistema: Se ha detectado una cohorte histórica guardada en disco. No es necesario volver a subir el archivo.")
-
-    if st.session_state['X_jaen'] is not None:
-        if st.button("INICIAR CALIBRACIÓN INSTITUCIONAL", use_container_width=True):
-            imputer = SimpleImputer(strategy='median')
-            X_imp = imputer.fit_transform(st.session_state['X_jaen'])
-            scaler = StandardScaler()
-            X_sca = scaler.fit_transform(X_imp)
-
-            # 1. Entrenar Regresión Logística
-            clf = LogisticRegression(max_iter=2000, class_weight='balanced')
-            clf.fit(X_sca, st.session_state['y_jaen'])
-
-            # 2. Entrenar XGBoost con cálculo dinámico del peso de desbalance de clases
-            totales = len(st.session_state['y_jaen'])
-            positivos = sum(st.session_state['y_jaen'])
-            scale_pos_weight = (totales - positivos) / positivos if positivos > 0 else 1
+        if archivo_csv:
+            df_subido = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
+            df_subido.to_csv(ruta_datos_locales, index=False)
+            procesar_y_guardar_dataframe(df_subido)
+            st.toast("Base de datos almacenada correctamente en el sistema local.")
             
-            clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
-            clf_xgb.fit(X_sca, st.session_state['y_jaen'])
+        elif st.session_state['X_jaen'] is not None:
+            st.caption("Información del sistema: Se ha detectado una cohorte histórica guardada en disco. No es necesario volver a subir el archivo.")
 
-            umbral_actual = st.session_state.get('umbral_jaen', 0.522)
+        if st.session_state['X_jaen'] is not None:
+            if st.button("INICIAR CALIBRACIÓN INSTITUCIONAL", use_container_width=True):
+                imputer = SimpleImputer(strategy='median')
+                X_imp = imputer.fit_transform(st.session_state['X_jaen'])
+                scaler = StandardScaler()
+                X_sca = scaler.fit_transform(X_imp)
 
-            # Persistencia de ambos modelos en el archivo comprimido
-            with open(ruta_modelo, 'wb') as archivo:
-                pickle.dump({
-                    'clf': clf, 
-                    'clf_xgb': clf_xgb, 
-                    'imputer': imputer, 
-                    'scaler': scaler, 
-                    'columnas': st.session_state['columnas_jaen'], 
-                    'umbral': umbral_actual
-                }, archivo)
+                # 1. Entrenar Regresión Logística
+                clf = LogisticRegression(max_iter=2000, class_weight='balanced')
+                clf.fit(X_sca, st.session_state['y_jaen'])
 
-            df_coef = pd.DataFrame({
-                'Biomarcador': st.session_state['columnas_jaen'],
-                'Coeficiente (Peso matemático)': np.round(clf.coef_[0], 4)
-            }).sort_values(by='Coeficiente (Peso matemático)', ascending=False)
+                # 2. Entrenar XGBoost con cálculo dinámico del peso de desbalance de clases
+                totales = len(st.session_state['y_jaen'])
+                positivos = sum(st.session_state['y_jaen'])
+                scale_pos_weight = (totales - positivos) / positivos if positivos > 0 else 1
+                
+                clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
+                clf_xgb.fit(X_sca, st.session_state['y_jaen'])
 
-            st.session_state['df_coef_jaen'] = df_coef
-            st.session_state['modelo_entrenado'] = True
-            st.session_state['clf_jaen'] = clf
-            st.session_state['clf_xgb'] = clf_xgb
-            st.session_state['imputer_jaen'] = imputer
-            st.session_state['scaler_jaen'] = scaler
+                umbral_actual = st.session_state.get('umbral_jaen', 0.522)
 
-            st.success("Operación completada: Motores predictivos (Lineal e IA) calibrados y guardados de forma persistente.")
+                # Persistencia de ambos modelos
+                with open(ruta_modelo, 'wb') as archivo:
+                    pickle.dump({
+                        'clf': clf, 
+                        'clf_xgb': clf_xgb, 
+                        'imputer': imputer, 
+                        'scaler': scaler, 
+                        'columnas': st.session_state['columnas_jaen'], 
+                        'umbral': umbral_actual
+                    }, archivo)
 
-    if 'df_coef_jaen' in st.session_state:
+                st.session_state['modelo_entrenado'] = True
+                st.session_state['clf_jaen'] = clf
+                st.session_state['clf_xgb'] = clf_xgb
+                st.session_state['imputer_jaen'] = imputer
+                st.session_state['scaler_jaen'] = scaler
+
+                st.success("Operación completada: Motores predictivos (Lineal e IA) calibrados y guardados de forma persistente.")
+
+    if st.session_state['modelo_entrenado'] and st.session_state.get('clf_xgb') is not None:
         st.write("")
         st.divider()
-
-        st.markdown("#### TABLA DE COEFICIENTES (MODELO LINEAL)")
-        st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>Pesos numéricos exactos calculados para la ecuación Logit de Jaén.</p>", unsafe_allow_html=True)
-        st.dataframe(st.session_state['df_coef_jaen'], use_container_width=True, hide_index=True)
-
-        st.write("")
-        st.markdown("#### IMPACTO PARAMÉTRICO EN EL RIESGO CLÍNICO")
-        st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>En verde se representan los factores de riesgo (suman al score); en rojo los factores protectores (restan).</p>", unsafe_allow_html=True)
-
-        grafico = alt.Chart(st.session_state['df_coef_jaen']).mark_bar().encode(
-            x=alt.X('Coeficiente (Peso matemático):Q', title='Peso Predictivo (Regresión Logística)'),
-            y=alt.Y('Biomarcador:N', sort='x', title=''), 
-            color=alt.condition(alt.datum['Coeficiente (Peso matemático)'] > 0, alt.value('#3b5a2f'), alt.value('#b91c1c')),
-            tooltip=['Biomarcador', 'Coeficiente (Peso matemático)']
-        ).properties(height=400).interactive()
-
-        st.altair_chart(grafico, use_container_width=True) 
+        st.markdown("### AUDITORÍA DE MATRIZ DE PESOS DUAL")
+        st.markdown("<p style='color: #64748b; font-size: 0.95rem;'>Comparativa visual de cómo cada algoritmo toma sus decisiones en base a los biomarcadores.</p>", unsafe_allow_html=True)
         
+        # Preparar DataFrames para las gráficas
+        df_coef_lr = pd.DataFrame({
+            'Biomarcador': st.session_state['columnas_jaen'],
+            'Valor': np.round(st.session_state['clf_jaen'].coef_[0], 4)
+        })
+        
+        df_imp_xgb = pd.DataFrame({
+            'Biomarcador': st.session_state['columnas_jaen'],
+            'Valor': np.round(st.session_state['clf_xgb'].feature_importances_, 4)
+        })
+
+        col_graf_1, col_graf_2 = st.columns(2)
+        
+        with col_graf_1:
+            st.markdown("#### IMPACTO LINEAL (LIS / Regresión)")
+            grafico_lr = alt.Chart(df_coef_lr).mark_bar().encode(
+                x=alt.X('Valor:Q', title='Peso Predictivo (+ / -)'),
+                y=alt.Y('Biomarcador:N', sort='-x', title=''), 
+                color=alt.condition(alt.datum['Valor'] > 0, alt.value('#3b5a2f'), alt.value('#b91c1c')),
+                tooltip=['Biomarcador', 'Valor']
+            ).properties(height=350)
+            st.altair_chart(grafico_lr, use_container_width=True) 
+            
+            # NUEVO: Pie explicativo Modelo Lineal
+            st.markdown("""
+            <div style='font-size: 0.85rem; color: #475569; background-color: #f8fafc; padding: 12px; border-radius: 6px; border-left: 3px solid #3b5a2f;'>
+                <b>Interpretación Clínica:</b> Las barras hacia la derecha (verdes) indican factores de riesgo que <i>suman</i> probabilidad de enfermedad. Las barras hacia la izquierda (rojas) indican factores protectores que <i>restan</i> riesgo. La longitud de la barra indica su peso rígido en la fórmula matemática tradicional.
+            </div>
+            """, unsafe_allow_html=True)
+
+        with col_graf_2:
+            st.markdown("#### IMPORTANCIA (IA Avanzada / XGBoost)")
+            grafico_xgb = alt.Chart(df_imp_xgb).mark_bar(color='#008f4c').encode(
+                x=alt.X('Valor:Q', title='Nivel de Importancia (0 a 1)'),
+                y=alt.Y('Biomarcador:N', sort='-x', title=''), 
+                tooltip=['Biomarcador', 'Valor']
+            ).properties(height=350)
+            st.altair_chart(grafico_xgb, use_container_width=True)
+            
+            # NUEVO: Pie explicativo Modelo IA
+            st.markdown("""
+            <div style='font-size: 0.85rem; color: #475569; background-color: #f8fafc; padding: 12px; border-radius: 6px; border-left: 3px solid #008f4c;'>
+                <b>Interpretación Clínica:</b> Representa la "Importancia" (de 0 a 1). Aquí no hay valores negativos porque indica <i>qué porcentaje de atención</i> dedica la Inteligencia Artificial a cada variable para buscar patrones ocultos, independientemente de si el valor del paciente es alto o bajo.
+            </div>
+            """, unsafe_allow_html=True)
+
 # ==========================================
 # PESTAÑA 3: VALIDACIÓN Y RENDIMIENTO CLÍNICO
 # ==========================================
@@ -355,9 +382,13 @@ with tab3:
     st.markdown("### VALIDACIÓN Y RENDIMIENTO CLÍNICO")
     
     st.markdown("""
-    <div style="background-color: #f1f5f9; padding: 1rem; border-radius: 8px; border-left: 4px solid #3b5a2f; margin-bottom: 2rem;">
-        <h4 style="margin-top: 0; color: #334155;">Auditoría de fiabilidad (Hold-out 75/25)</h4>
-        <p style="color: #475569;">Este módulo valida el modelo predictivo mediante una separación estricta de datos (training/test). Calcula el AUC y optimiza el punto de corte (Umbral de Youden) para garantizar la máxima seguridad en la detección de casos.</p>
+    <div style="background-color: #f1f5f9; padding: 1.2rem; border-radius: 8px; border-left: 4px solid #3b5a2f; margin-bottom: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <h4 style="margin-top: 0; color: #334155; margin-bottom: 10px;">Auditoría Clínica y Calidad Predictiva</h4>
+        <p style="color: #475569; font-size: 0.95rem; margin-bottom: 0;">
+            Este módulo garantiza que el algoritmo no está simplemente "memorizando" historiales, sino aprendiendo a diagnosticar. 
+            Para ello, el sistema se auto-examina aislando a un <b>25% de pacientes históricos de forma ciega</b>. 
+            En base a este examen, recalibramos automáticamente el umbral de alerta (Punto óptimo) para <b>maximizar la detección de casos reales (sensibilidad) reduciendo al máximo las falsas alarmas (especificidad)</b>.
+        </p>
     </div>
     """, unsafe_allow_html=True)
     
