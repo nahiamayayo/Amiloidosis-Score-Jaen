@@ -274,87 +274,87 @@ if os.path.exists(ruta_datos_locales) and st.session_state['X_jaen'] is None:
     except:
         pass
 
-# ==========================================
+==========================================
 # PESTAÑA 2: CALIBRACIÓN DEL MOTOR
 # ==========================================
+
 with tab2:
-    st.markdown("### CONFIGURACIÓN Y ENTRENAMIENTO DEL MODELO")
+
+    st.markdown("### CALIBRACIÓN DEL MOTOR PREDICTIVO")
+    st.info("Módulo restringido para actualización de la matriz de pesos del modelo local mediante Regresión Logística Multivariante.")
     
-    st.markdown("""
-    Esta sección permite actualizar la Inteligencia Artificial con nuevos datos históricos. 
-    Se ejecutan dos modelos: **Regresión Logística** (para la fórmula clínica del laboratorio) y **XGBoost** (para la predicción avanzada).
-    """)
+    st.markdown("#### Carga de archivos de cohorte")
+    archivo_csv = st.file_uploader("Cargar Base de Datos Histórica (.xlsx / .csv)", type=["xlsx", "csv"], label_visibility="collapsed")
 
-    col_data1, col_data2 = st.columns([1.2, 1])
+    if archivo_csv:
 
-    with col_data1:
-        st.markdown("#### 1. Actualización de Cohorte")
-        archivo_csv = st.file_uploader("Subir base de datos histórica (.xlsx / .csv)", type=["xlsx", "csv"], label_visibility="collapsed")
+        df_subido = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
+        df_subido.to_csv(ruta_datos_locales, index=False)
+        procesar_y_guardar_dataframe(df_subido)
+        st.toast("Base de datos almacenada correctamente en el sistema local.")
         
-        if archivo_csv:
-            df_subido = pd.read_csv(archivo_csv) if archivo_csv.name.endswith('.csv') else pd.read_excel(archivo_csv)
-            df_subido.to_csv(ruta_datos_locales, index=False)
-            procesar_y_guardar_dataframe(df_subido)
-            st.toast("Base de datos actualizada.")
-        
-        if os.path.exists(ruta_datos_locales):
-            st.success("✅ Cohorte histórica detectada y operativa.")
-    
-    with col_data2:
-        st.markdown("#### 2. Entrenamiento Dual")
-        if st.session_state['X_jaen'] is not None:
-            if st.button("INICIAR ENTRENAMIENTO HÍBRIDO", use_container_width=True):
-                # 1. Preparación de datos
-                imputer = SimpleImputer(strategy='median')
-                scaler = StandardScaler()
-                X_imp = imputer.fit_transform(st.session_state['X_jaen'])
-                X_sca = scaler.fit_transform(X_imp)
-                
-                # 2. Entrenar Regresión Logística (Fórmula Laboratorio)
-                clf_lr = LogisticRegression(max_iter=2000, class_weight='balanced')
-                clf_lr.fit(X_sca, st.session_state['y_jaen'])
-                
-                # 3. Entrenar XGBoost (Precisión)
-                clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42)
-                clf_xgb.fit(X_sca, st.session_state['y_jaen'])
-                
-                # 4. Guardar
-                with open(ruta_modelo, 'wb') as archivo:
-                    pickle.dump({'clf_lr': clf_lr, 'clf_xgb': clf_xgb, 'imputer': imputer, 'scaler': scaler, 'columnas': st.session_state['columnas_jaen']}, archivo)
-                
-                st.session_state.update({'modelo_entrenado': True, 'clf_lr': clf_lr, 'clf_xgb': clf_xgb, 'imputer_jaen': imputer, 'scaler_jaen': scaler})
-                st.success("Modelos entrenados correctamente.")
+    elif st.session_state['X_jaen'] is not None:
 
-    # --- ZONA DE VISUALIZACIÓN ---
-    if st.session_state.get('modelo_entrenado'):
+        st.caption("Información del sistema: Se ha detectado una cohorte histórica guardada en disco. No es necesario volver a subir el archivo.")
+
+    if st.session_state['X_jaen'] is not None:
+
+        if st.button("INICIAR CALIBRACIÓN INSTITUCIONAL", use_container_width=True):
+
+            imputer = SimpleImputer(strategy='median')
+            X_imp = imputer.fit_transform(st.session_state['X_jaen'])
+            scaler = StandardScaler()
+            X_sca = scaler.fit_transform(X_imp)
+
+            clf = LogisticRegression(max_iter=2000, class_weight='balanced')
+            clf.fit(X_sca, st.session_state['y_jaen'])
+
+            umbral_actual = st.session_state.get('umbral_jaen', 0.522)
+
+            with open(ruta_modelo, 'wb') as archivo:
+
+                pickle.dump({'clf': clf, 'imputer': imputer, 'scaler': scaler, 'columnas': st.session_state['columnas_jaen'], 'umbral': umbral_actual}, archivo)
+
+            df_coef = pd.DataFrame({
+
+                'Biomarcador': st.session_state['columnas_jaen'],
+                'Coeficiente (Peso matemático)': np.round(clf.coef_[0], 4)
+            }).sort_values(by='Coeficiente (Peso matemático)', ascending=False)
+
+            st.session_state['df_coef_jaen'] = df_coef
+            st.session_state['modelo_entrenado'] = True
+            st.session_state['clf_jaen'] = clf
+            st.session_state['imputer_jaen'] = imputer
+            st.session_state['scaler_jaen'] = scaler
+
+            st.success("Operación completada: Motor predictivo calibrado y matriz de pesos persistida.")
+
+    # Renderizado Vertical Óptimo
+
+    if 'df_coef_jaen' in st.session_state:
+
+        st.write("")
         st.divider()
-        
-        # A. FÓRMULA PARA LABORATORIO (Desplegable)
-        with st.expander("DETALLE TÉCNICO PARA LABORATORIO (Fórmula)", expanded=False):
-            st.markdown("Pesos para implementar en el sistema LIS (Regresión Logística):")
-            coefs = pd.DataFrame({
-                'Biomarcador': st.session_state['columnas_jaen'], 
-                'Peso (Coeficiente)': st.session_state['clf_lr'].coef_[0]
-            })
-            intercepto = st.session_state['clf_lr'].intercept_[0]
-            st.dataframe(coefs, use_container_width=True, hide_index=True)
-            st.write(f"**Intercepto (Beta 0):** {intercepto:.4f}")
-            st.markdown("`z = Intercepto + (Peso1*Val1) + ... + (Peson*Valn)`")
 
-        # B. PESO PREDICTIVO (Gráfico XGBoost)
-        st.markdown("#### PESO PREDICTIVO (IMPORTANCIA DE VARIABLES - XGBOOST)")
-        data_imp = pd.DataFrame({
-            'Biomarcador': st.session_state['columnas_jaen'],
-            'Importancia': st.session_state['clf_xgb'].feature_importances_
-        }).sort_values(by='Importancia', ascending=False)
-        
-        grafico = alt.Chart(data_imp).mark_bar(color='#3b5a2f').encode(
-            x=alt.X('Importancia:Q', title='Contribución al Modelo'),
-            y=alt.Y('Biomarcador:N', sort='-x', title=''),
-            tooltip=['Biomarcador', 'Importancia']
+        st.markdown("#### TABLA DE COEFICIENTES")
+        st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>Pesos numéricos exactos calculados para la ecuación Logit de Jaén.</p>", unsafe_allow_html=True)
+        st.dataframe(st.session_state['df_coef_jaen'], use_container_width=True, hide_index=True)
+
+        st.write("")
+        st.markdown("#### IMPACTO PARAMÉTRICO EN EL RIESGO CLÍNICO")
+        st.markdown("<p style='color: #64748b; font-size: 0.9rem; margin-top: -10px;'>En verde se representan los factores de riesgo (suman al score); en rojo los factores protectores (restan).</p>", unsafe_allow_html=True)
+
+        # COLOR: Verde Oliva SAS vs Rojo Fisiológico
+
+        grafico = alt.Chart(st.session_state['df_coef_jaen']).mark_bar().encode(
+
+            x=alt.X('Coeficiente (Peso matemático):Q', title='Peso Predictivo (Regresión Logística)'),
+            y=alt.Y('Biomarcador:N', sort='x', title=''), 
+            color=alt.condition(alt.datum['Coeficiente (Peso matemático)'] > 0, alt.value('#3b5a2f'), alt.value('#b91c1c')),
+            tooltip=['Biomarcador', 'Coeficiente (Peso matemático)']
         ).properties(height=400).interactive()
-        
-        st.altair_chart(grafico, use_container_width=True)
+
+        st.altair_chart(grafico, use_container_width=True) 
         
 # ==========================================
 # PESTAÑA 3: VALIDACIÓN Y RENDIMIENTO CLÍNICO
