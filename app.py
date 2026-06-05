@@ -101,7 +101,7 @@ st.markdown("""
     .streamlit-expanderHeader { font-weight: 600 !important; color: #475569 !important; }
     
     /* Cajas de instrucciones */
-    .instrucciones-caja { background-color: #ffffff; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #008f4c; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    .instrucciones-caja { background-color: #ffffff; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #008f4c; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -123,23 +123,29 @@ tab1, tab2, tab3 = st.tabs(["EVALUACIÓN CLÍNICA", "CALIBRACIÓN DEL MOTOR", "A
 with tab1:
     st.markdown("### IMPORTACIÓN DE ANALÍTICA")
     
-    # Hemos creado dos columnas: una para el texto explicativo y otra para el botón de subir el PDF
-    col_instrucciones, col_carga = st.columns([1.2, 1])
-    
-    with col_instrucciones:
-        st.markdown("""
-        <div class="instrucciones-caja">
-        <h4 style="margin-top: 0; color: #334155;">Instrucciones de uso:</h4>
-        <p style="color: #475569; margin-bottom: 0;">
-        1. Descargue el informe analítico del paciente en formato PDF original.<br>
-        2. Arrastre el documento a la zona de carga situada a la derecha.<br>
-        3. El lector óptico extraerá los 10 biomarcadores de rutina automáticamente.
-        </p>
+    # Instrucciones en formato horizontal de tarjetas
+    st.markdown("""
+    <div class="instrucciones-caja">
+        <h4 style="margin-top: 0; color: #334155; margin-bottom: 15px;">Instrucciones de uso:</h4>
+        <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px; background-color: #f1f5f9; padding: 12px; border-radius: 6px; border-left: 3px solid #008f4c;">
+                <strong>1. Preparación</strong><br>
+                <span style="color: #475569; font-size: 0.9em;">Descargue el PDF original del SAS y asegúrese de que la muestra esté <b>anonimizada</b>.</span>
+            </div>
+            <div style="flex: 1; min-width: 200px; background-color: #f1f5f9; padding: 12px; border-radius: 6px; border-left: 3px solid #008f4c;">
+                <strong>2. Carga</strong><br>
+                <span style="color: #475569; font-size: 0.9em;">Arrastre el archivo o haga clic en la zona de subida situada justo debajo.</span>
+            </div>
+            <div style="flex: 1; min-width: 200px; background-color: #f1f5f9; padding: 12px; border-radius: 6px; border-left: 3px solid #008f4c;">
+                <strong>3. Extracción</strong><br>
+                <span style="color: #475569; font-size: 0.9em;">El lector óptico procesará los 10 biomarcadores clave de forma automática.</span>
+            </div>
         </div>
-        """, unsafe_allow_html=True)
-        
-    with col_carga:
-        pdf_subido = st.file_uploader("Arrastre el archivo PDF o haga clic para subir", type=["pdf"], label_visibility="collapsed")
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Uploader horizontal ocupando todo el ancho
+    pdf_subido = st.file_uploader("Arrastre el archivo PDF o haga clic para subir", type=["pdf"], label_visibility="collapsed")
         
     valores_extraidos = {k: 0.0 for k in st.session_state['columnas_jaen']}
     
