@@ -220,12 +220,13 @@ with tab1:
                 # código (if/else siguiente) siga funcionando correctamente.
                 
                 st.write("")
-                # Usamos prob_xgb solo para la lógica de decisión, pero no mostramos el 1.4%
-                if prob_xgb >= umbral_clinico:
-                    st.error(f"ATENCIÓN CLÍNICA: RIESGO SIGNIFICATIVO detectado por IA. Se recomienda revisión del caso.")
+                # --- LÓGICA DE ALERTA ---
+                # Usamos prob_lr para disparar la alerta, ya que es el modelo que actualmente refleja correctamente la sospecha clínica.
+                if prob_lr >= umbral_clinico:
+                    st.error(f"ATENCIÓN CLÍNICA: RIESGO SIGNIFICATIVO. El perfil supera el umbral del {umbral_clinico*100:.1f}%. Se recomienda derivación.")
                     riesgo_texto = "ALTO RIESGO"
                 else:
-                    st.success(f"VALORACIÓN: BAJO RIESGO CLÍNICO detectado por IA.")
+                    st.success(f"VALORACIÓN: BAJO RIESGO CLÍNICO. El perfil se mantiene por debajo del umbral del {umbral_clinico*100:.1f}%.")
                     riesgo_texto = "BAJO RIESGO"
                 
                 st.write("")
