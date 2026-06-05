@@ -37,7 +37,7 @@ if os.path.exists(ruta_modelo):
         datos = pickle.load(archivo)
         st.session_state['modelo_entrenado'] = True
         st.session_state['clf_jaen'] = datos['clf']
-        st.session_state['clf_xgb'] = datos.get('clf_xgb', None)  # Recuperación segura del modelo XGBoost
+        st.session_state['clf_xgb'] = datos.get('clf_xgb', None)
         st.session_state['imputer_jaen'] = datos['imputer']
         st.session_state['scaler_jaen'] = datos['scaler']
         st.session_state['columnas_jaen'] = datos['columnas']
@@ -294,7 +294,7 @@ with tab2:
                 clf = LogisticRegression(max_iter=2000, class_weight='balanced')
                 clf.fit(X_sca, st.session_state['y_jaen'])
 
-                # 2. Entrenar XGBoost con cálculo dinámico del peso de desbalance de clases
+                # 2. Entrenar XGBoost
                 totales = len(st.session_state['y_jaen'])
                 positivos = sum(st.session_state['y_jaen'])
                 scale_pos_weight = (totales - positivos) / positivos if positivos > 0 else 1
@@ -304,7 +304,7 @@ with tab2:
 
                 umbral_actual = st.session_state.get('umbral_jaen', 0.522)
 
-                # Persistencia de ambos modelos
+                # Persistencia
                 with open(ruta_modelo, 'wb') as archivo:
                     pickle.dump({
                         'clf': clf, 
@@ -321,13 +321,13 @@ with tab2:
                 st.session_state['imputer_jaen'] = imputer
                 st.session_state['scaler_jaen'] = scaler
 
-                st.success("Operación completada: Motores predictivos (Lineal e IA) calibrados y guardados de forma persistente.")
+                st.success("Operación completada: Motores predictivos calibrados y guardados de forma persistente.")
 
     if st.session_state['modelo_entrenado'] and st.session_state.get('clf_xgb') is not None:
         st.write("")
         st.divider()
         st.markdown("### AUDITORÍA DE MATRIZ DE PESOS DUAL")
-        st.markdown("<p style='color: #64748b; font-size: 0.95rem;'>Comparativa visual de cómo cada algoritmo toma sus decisiones en base a los biomarcadores.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='color: #64748b; font-size: 0.95rem;'>Comparativa visual de cómo cada algoritmo pondera fisiológicamente los biomarcadores.</p>", unsafe_allow_html=True)
         
         # Preparar DataFrames para las gráficas
         df_coef_lr = pd.DataFrame({
@@ -340,40 +340,39 @@ with tab2:
             'Valor': np.round(st.session_state['clf_xgb'].feature_importances_, 4)
         })
 
-        col_graf_1, col_graf_2 = st.columns(2)
+        # --- SECCIÓN 1: MODELO LINEAL ---
+        st.markdown("#### 1. IMPACTO LINEAL (LIS / Regresión Logística)")
+        grafico_lr = alt.Chart(df_coef_lr).mark_bar().encode(
+            x=alt.X('Valor:Q', title='Peso Predictivo (Coeficiente)'),
+            y=alt.Y('Biomarcador:N', sort='-x', title=''), 
+            # Color equilibrado: Verde SAS para positivos, Gris Pizarra para negativos
+            color=alt.condition(alt.datum['Valor'] > 0, alt.value('#008f4c'), alt.value('#64748b')),
+            tooltip=['Biomarcador', 'Valor']
+        ).properties(height=350)
+        st.altair_chart(grafico_lr, use_container_width=True) 
         
-        with col_graf_1:
-            st.markdown("#### IMPACTO LINEAL (LIS / Regresión)")
-            grafico_lr = alt.Chart(df_coef_lr).mark_bar().encode(
-                x=alt.X('Valor:Q', title='Peso Predictivo (+ / -)'),
-                y=alt.Y('Biomarcador:N', sort='-x', title=''), 
-                color=alt.condition(alt.datum['Valor'] > 0, alt.value('#3b5a2f'), alt.value('#b91c1c')),
-                tooltip=['Biomarcador', 'Valor']
-            ).properties(height=350)
-            st.altair_chart(grafico_lr, use_container_width=True) 
-            
-            # NUEVO: Pie explicativo Modelo Lineal
-            st.markdown("""
-            <div style='font-size: 0.85rem; color: #475569; background-color: #f8fafc; padding: 12px; border-radius: 6px; border-left: 3px solid #3b5a2f;'>
-                <b>Interpretación Clínica:</b> Las barras hacia la derecha (verdes) indican factores de riesgo que <i>suman</i> probabilidad de enfermedad. Las barras hacia la izquierda (rojas) indican factores protectores que <i>restan</i> riesgo. La longitud de la barra indica su peso rígido en la fórmula matemática tradicional.
-            </div>
-            """, unsafe_allow_html=True)
+        st.markdown("""
+        <div style='font-size: 0.9rem; color: #475569; background-color: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #008f4c; margin-bottom: 2rem;'>
+            <b>Interpretación Clínica:</b> Este modelo aplica una ecuación matemática estricta. Las barras hacia la derecha (verdes) indican biomarcadores donde <i>valores más altos</i> se asocian a un mayor riesgo de amiloidosis. Las barras hacia la izquierda (grises) indican biomarcadores que exhiben una relación inversa: en estos casos, <b>un valor en sangre anormalmente bajo es lo que alerta del riesgo de enfermedad</b> (por ejemplo, glucosa o triglicéridos bajos asociados a estadios avanzados).
+        </div>
+        """, unsafe_allow_html=True)
 
-        with col_graf_2:
-            st.markdown("#### IMPORTANCIA (IA Avanzada / XGBoost)")
-            grafico_xgb = alt.Chart(df_imp_xgb).mark_bar(color='#008f4c').encode(
-                x=alt.X('Valor:Q', title='Nivel de Importancia (0 a 1)'),
-                y=alt.Y('Biomarcador:N', sort='-x', title=''), 
-                tooltip=['Biomarcador', 'Valor']
-            ).properties(height=350)
-            st.altair_chart(grafico_xgb, use_container_width=True)
-            
-            # NUEVO: Pie explicativo Modelo IA
-            st.markdown("""
-            <div style='font-size: 0.85rem; color: #475569; background-color: #f8fafc; padding: 12px; border-radius: 6px; border-left: 3px solid #008f4c;'>
-                <b>Interpretación Clínica:</b> Representa la "Importancia" (de 0 a 1). Aquí no hay valores negativos porque indica <i>qué porcentaje de atención</i> dedica la Inteligencia Artificial a cada variable para buscar patrones ocultos, independientemente de si el valor del paciente es alto o bajo.
-            </div>
-            """, unsafe_allow_html=True)
+        st.divider()
+
+        # --- SECCIÓN 2: MODELO IA AVANZADA ---
+        st.markdown("#### 2. IMPORTANCIA DEL PATRÓN (IA Avanzada / XGBoost)")
+        grafico_xgb = alt.Chart(df_imp_xgb).mark_bar(color='#3b5a2f').encode(
+            x=alt.X('Valor:Q', title='Nivel de Importancia (0 a 1)'),
+            y=alt.Y('Biomarcador:N', sort='-x', title=''), 
+            tooltip=['Biomarcador', 'Valor']
+        ).properties(height=350)
+        st.altair_chart(grafico_xgb, use_container_width=True)
+        
+        st.markdown("""
+        <div style='font-size: 0.9rem; color: #475569; background-color: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #3b5a2f;'>
+            <b>Interpretación Clínica:</b> Representa el porcentaje de atención global que la Inteligencia Artificial dedica a cada variable para buscar patrones médicos cruzados (no hay valores negativos porque no es una suma/resta). La IA no evalúa los biomarcadores de forma aislada, sino que aprende a ver el "cuadro general" del paciente, superando las limitaciones clínicas de las fórmulas rígidas.
+        </div>
+        """, unsafe_allow_html=True)
 
 # ==========================================
 # PESTAÑA 3: VALIDACIÓN Y RENDIMIENTO CLÍNICO
