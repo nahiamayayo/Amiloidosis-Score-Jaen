@@ -14,22 +14,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import pickle
-import os
-import re
-import pdfplumber
-
-import streamlit as st
-import pandas as pd
-import numpy as np
-import pickle
-import os
-import re
-import pdfplumber
-
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(page_title="Screening Amiloidosis Jaén", layout="wide", initial_sidebar_state="collapsed")
 
@@ -115,6 +99,9 @@ st.markdown("""
     /* Métricas Estadísticas (Verde Oliva Intenso) */
     div[data-testid="stMetricValue"] { color: #3b5a2f; font-weight: 800; font-size: 2.2rem;}
     .streamlit-expanderHeader { font-weight: 600 !important; color: #475569 !important; }
+    
+    /* Cajas de instrucciones */
+    .instrucciones-caja { background-color: #ffffff; padding: 1.5rem; border-radius: 8px; border-left: 4px solid #008f4c; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -134,8 +121,26 @@ tab1, tab2, tab3 = st.tabs(["EVALUACIÓN CLÍNICA", "CALIBRACIÓN DEL MOTOR", "A
 # PESTAÑA 1: EVALUACIÓN EN CONSULTA
 # ==========================================
 with tab1:
-    st.markdown("### 1. CARGA DE ANALÍTICA (PDF)")
-    pdf_subido = st.file_uploader("Arrastre el archivo PDF o haga clic para subir la analítica del SAS", type=["pdf"], label_visibility="collapsed")
+    st.markdown("### IMPORTACIÓN DE ANALÍTICA")
+    
+    # Hemos creado dos columnas: una para el texto explicativo y otra para el botón de subir el PDF
+    col_instrucciones, col_carga = st.columns([1.2, 1])
+    
+    with col_instrucciones:
+        st.markdown("""
+        <div class="instrucciones-caja">
+        <h4 style="margin-top: 0; color: #334155;">Instrucciones de uso:</h4>
+        <p style="color: #475569; margin-bottom: 0;">
+        1. Descargue el informe analítico del paciente en formato PDF original.<br>
+        2. Arrastre el documento a la zona de carga situada a la derecha.<br>
+        3. El lector óptico extraerá los 10 biomarcadores de rutina automáticamente.
+        </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col_carga:
+        pdf_subido = st.file_uploader("Arrastre el archivo PDF o haga clic para subir", type=["pdf"], label_visibility="collapsed")
+        
     valores_extraidos = {k: 0.0 for k in st.session_state['columnas_jaen']}
     
     if pdf_subido is not None:
@@ -147,7 +152,7 @@ with tab1:
                     if t: texto_completo += t + "\n"
             
             if not texto_completo.strip():
-                st.warning("ATENCIÓN: El documento parece ser una imagen escaneada o no contiene texto digital. El sistema de extracción óptica requiere un PDF nativo del SAS. Por favor, introduzca los valores manualmente.")
+                st.warning("ATENCIÓN: El documento parece ser una imagen escaneada o no contiene texto digital. El sistema de extracción óptica requiere un PDF nativo. Por favor, introduzca los valores manualmente.")
             else:
                 patrones = {
                     'Glucosa': r'Glucosa', 'Trigliceridos': r'Triglic[eé]ridos|Triglic', 'Colesterol': r'Colesterol',
@@ -163,14 +168,14 @@ with tab1:
         except Exception as e: st.error(f"Error procesando documento PDF: {e}")
 
     st.write("")
-    with st.expander("2. VERIFICACIÓN DE PARÁMETROS", expanded=True):
+    with st.expander("VERIFICACIÓN DE PARÁMETROS", expanded=True):
         st.info("💡 **Nota de seguridad:** Revise que los valores extraídos son correctos. Los valores en '0.0' indican ausencia de dato en la analítica primaria. El sistema ajustará el cálculo usando la media del hospital (máximo 2 variables faltantes permitidas).")
         cols = st.columns(2)
         for i, (k, v) in enumerate(valores_extraidos.items()):
             valores_extraidos[k] = cols[i % 2].number_input(k, value=float(v))
     
     st.write("")
-    st.markdown("### 3. ANÁLISIS Y TRIAJE")
+    st.markdown("### ESTRATIFICACIÓN DE RIESGO")
     
     if st.button("CALCULAR NIVEL DE RIESGO", use_container_width=True):
         if not st.session_state['modelo_entrenado']:
