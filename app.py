@@ -22,6 +22,14 @@ import os
 import re
 import pdfplumber
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import pickle
+import os
+import re
+import pdfplumber
+
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(page_title="Screening Amiloidosis Jaén", layout="wide", initial_sidebar_state="collapsed")
 
