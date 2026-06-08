@@ -387,33 +387,34 @@ with tab3:
         st.markdown("---")
         st.markdown("#### CURVA DE RENDIMIENTO (ROC)")
         
-        # Corregimos los nombres para que el valor del AUC se imprima explícitamente en la leyenda
-        texto_leyenda_modelo = f"Regresión Logística (AUC = {st.session_state['auc_lr']:.3f})"
+        # 1. Creamos un título dinámico con el AUC bien visible
+        st.markdown(f"### Valor de AUC (Área bajo la curva): **{st.session_state['auc_lr']:.3f}**")
         
+        # 2. Simplificamos la leyenda para que no se corte
         df_modelo = st.session_state['df_roc_data'].copy()
-        df_modelo['Modelo'] = texto_leyenda_modelo
+        df_modelo['Modelo'] = 'Regresión Logística'
         
         df_ref = pd.DataFrame({
             'FPR': [0, 1], 
             'TPR': [0, 1], 
-            'Modelo': 'Referencia Aleatoria (Gris)'
+            'Modelo': 'Referencia Aleatoria'
         })
         
         df_plot = pd.concat([df_modelo, df_ref])
         
-        # Generación del gráfico con la leyenda corregida y limpia
+        # 3. Gráfico con colores institucionales y leyenda simplificada
         roc_chart = alt.Chart(df_plot).mark_line(size=3).encode(
-            x=alt.X('FPR', title='Tasa de Falsos Positivos (1 - Especificidad)'),
-            y=alt.Y('TPR', title='Tasa de Verdaderos Positivos (Sensibilidad)'),
+            x=alt.X('FPR', title='Tasa de Falsos Positivos'),
+            y=alt.Y('TPR', title='Tasa de Verdaderos Positivos'),
             color=alt.Color('Modelo', scale=alt.Scale(
-                domain=[texto_leyenda_modelo, 'Referencia Aleatoria (Gris)'],
+                domain=['Regresión Logística', 'Referencia Aleatoria'],
                 range=['#008f4c', '#94a3b8']
-            ), title="Leyenda del Motor Predictivo"),
+            )),
             strokeDash=alt.condition(
-                alt.datum.Modelo == 'Referencia Aleatoria (Gris)', 
+                alt.datum.Modelo == 'Referencia Aleatoria', 
                 alt.value([5, 5]), 
                 alt.value([0])
             )
-        ).properties(height=380).interactive()
+        ).properties(height=350).interactive()
         
         st.altair_chart(roc_chart, use_container_width=True)
