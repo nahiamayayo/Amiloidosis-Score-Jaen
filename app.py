@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
-st.set_page_config(page_title="Screening Amiloidosis Jaén", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="ATTR Lab", layout="wide", initial_sidebar_state="collapsed")
 
 ruta_modelo = 'modelo_jaen.pkl'
 ruta_datos_locales = 'datos_historicos_hospital.csv'
@@ -75,8 +75,8 @@ header_col1, header_col2 = st.columns([1.2, 6], vertical_alignment="center")
 with header_col1:
     if os.path.exists("huj.png"): st.image("huj.png", use_container_width=True) 
 with header_col2:
-    st.title("SCREENING AMILOIDOSIS JAÉN")
-    st.markdown("<p style='color: #64748b; font-size: 1.15rem; margin-top: -10px; font-weight: 500;'>PLATAFORMA ALGORÍTMICA DE CRIBADO INSTITUCIONAL</p>", unsafe_allow_html=True)
+    st.title("ATTR Lab")
+    st.markdown("<p style='color: #64748b; font-size: 1.15rem; margin-top: -10px; font-weight: 500;'>Herramienta de laboratorio para la estratificación de riesgo de amiloidosis cardíaca por transtirretina</p>", unsafe_allow_html=True)
 
 st.divider()
 
@@ -188,7 +188,7 @@ with tab1:
                 with st.expander("GENERAR INFORME DE ESTRATIFICACIÓN"):
                     informe = (
                         "========================================================\n"
-                        "INFORME DE ESTRATIFICACIÓN - SCREENING AMILOIDOSIS JAÉN\n"
+                        "INFORME DE ESTRATIFICACIÓN - ATTR Lab\n"
                         "========================================================\n\n"
                         "RESULTADOS DEL ANÁLISIS (Regresión Logística Multivariante):\n"
                         f"- Probabilidad Predictiva: {probabilidad:.1%}\n"
