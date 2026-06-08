@@ -213,12 +213,10 @@ with tab1:
                 st.markdown("---")
                 st.markdown("### RESULTADO DE ESTRATIFICACIÓN")
                 
-                # Mantenemos solo una columna para el Modelo Lineal (LIS)
-                col_res1 = st.columns(1)[0]
+                # AHORA SÍ: Mostramos ambos resultados lado a lado
+                col_res1, col_res2 = st.columns(2)
                 col_res1.metric("Probabilidad (Score Clínico)", f"{prob_lr:.1%}")
-                
-                # La línea de prob_xgb la mantenemos calculada para que el resto del 
-                # código (if/else siguiente) siga funcionando correctamente.
+                col_res2.metric("Probabilidad (IA Avanzada)", f"{prob_xgb:.1%}")
                 
                 st.write("")
                 # --- LÓGICA DE ALERTA ---
@@ -238,6 +236,7 @@ with tab1:
                         "========================================================\n\n"
                         "RESULTADOS DEL ANÁLISIS DUAL:\n"
                         f"- Probabilidad modelo Lineal (LIS): {prob_lr:.1%}\n"
+                        f"- Probabilidad modelo IA Avanzado (XGBoost): {prob_xgb:.1%}\n"
                         f"- CATEGORIZACIÓN FINAL DE RIESGO: {riesgo_texto}\n\n"
                         
                         "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado orientativa.\n"
@@ -311,7 +310,15 @@ with tab2:
                 positivos = sum(st.session_state['y_jaen'])
                 scale_pos_weight = (totales - positivos) / positivos if positivos > 0 else 1
                 
-                clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
+                clf_xgb = XGBClassifier(
+                    use_label_encoder=False, 
+                    eval_metric='logloss', 
+                    scale_pos_weight=scale_pos_weight,
+                    max_depth=3,          # Freno anti-sobreajuste 1
+                    learning_rate=0.1,    # Freno anti-sobreajuste 2
+                    min_child_weight=2,   # Freno anti-sobreajuste 3
+                    random_state=42
+                )
                 clf_xgb.fit(X_sca, st.session_state['y_jaen'])
 
                 umbral_actual = st.session_state.get('umbral_jaen', 0.522)
@@ -434,7 +441,15 @@ with tab3:
             
             # Evaluación XGBoost
             scale_pos_weight = (len(y_train) - sum(y_train)) / sum(y_train) if sum(y_train) > 0 else 1
-            clf_xgb_val = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
+            clf_xgb_val = XGBClassifier(
+                use_label_encoder=False, 
+                eval_metric='logloss', 
+                scale_pos_weight=scale_pos_weight,
+                max_depth=3, 
+                learning_rate=0.1, 
+                min_child_weight=2,
+                random_state=42
+            )
             clf_xgb_val.fit(X_train_sca, y_train)
             y_pred_prob_xgb = clf_xgb_val.predict_proba(X_test_sca)[:, 1]
             fpr_xgb, tpr_xgb, _ = roc_curve(y_test, y_pred_prob_xgb)
