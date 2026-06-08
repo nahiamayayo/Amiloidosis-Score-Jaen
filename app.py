@@ -5,6 +5,7 @@ import re
 import pdfplumber
 import os
 import pickle
+import matplotlib.pyplot as plt
 import altair as alt
 from sklearn.metrics import roc_curve, auc, confusion_matrix
 from sklearn.linear_model import LogisticRegression
@@ -188,14 +189,12 @@ with tab1:
             datos_paciente = []
             valores_faltantes = 0
             
-            # Contamos los valores faltantes mientras preparamos el array
             for col in st.session_state['columnas_jaen']:
                 val = valores_extraidos.get(col, 0.0)
                 if val == 0.0:
                     valores_faltantes += 1
                 datos_paciente.append(np.nan if val == 0.0 else val)
             
-            # --- FILTRO ESTRICTO DE SEGURIDAD ---
             if valores_faltantes > 2:
                 st.error(f"❌ ATENCIÓN CLÍNICA: Faltan {valores_faltantes} parámetros en la analítica. Para garantizar la seguridad del diagnóstico y evitar discrepancias entre los motores predictivos, el sistema exige un máximo de 2 variables ausentes. Por favor, complete los datos manualmente en la sección superior.")
             else:
@@ -212,16 +211,12 @@ with tab1:
                 st.markdown("---")
                 st.markdown("### RESULTADO DE ESTRATIFICACIÓN")
                 
-                # Mantenemos solo una columna para el Modelo Lineal (LIS)
-                col_res1 = st.columns(1)[0]
+                col_res1, col_res2 = st.columns(2)
                 col_res1.metric("Probabilidad (Score Clínico)", f"{prob_lr:.1%}")
-                
-                # La línea de prob_xgb la mantenemos calculada para que el resto del 
-                # código (if/else siguiente) siga funcionando correctamente.
+                col_res2.metric("Probabilidad (IA Avanzada)", f"{prob_xgb:.1%}")
                 
                 st.write("")
-                # --- LÓGICA DE ALERTA ---
-                # Usamos prob_lr para disparar la alerta, ya que es el modelo que actualmente refleja correctamente la sospecha clínica.
+                # Seguimos usando LR para disparar la alerta clínica general por estabilidad
                 if prob_lr >= umbral_clinico:
                     st.error(f"ATENCIÓN CLÍNICA: RIESGO SIGNIFICATIVO. El perfil supera el umbral del {umbral_clinico*100:.1f}%. Se recomienda derivación.")
                     riesgo_texto = "ALTO RIESGO"
@@ -237,8 +232,8 @@ with tab1:
                         "========================================================\n\n"
                         "RESULTADOS DEL ANÁLISIS DUAL:\n"
                         f"- Probabilidad modelo Lineal (LIS): {prob_lr:.1%}\n"
+                        f"- Probabilidad modelo IA Avanzado (XGBoost): {prob_xgb:.1%}\n"
                         f"- CATEGORIZACIÓN FINAL DE RIESGO: {riesgo_texto}\n\n"
-                        
                         "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado orientativa.\n"
                         "No constituye un diagnóstico definitivo ni sustituye el juicio clínico.\n"
                         "========================================================"
@@ -305,12 +300,20 @@ with tab2:
                 clf = LogisticRegression(max_iter=2000, class_weight='balanced')
                 clf.fit(X_sca, st.session_state['y_jaen'])
 
-                # 2. Entrenar XGBoost
+                # 2. Entrenar XGBoost (CON FRENOS ANTI-SOBREAJUSTE)
                 totales = len(st.session_state['y_jaen'])
                 positivos = sum(st.session_state['y_jaen'])
                 scale_pos_weight = (totales - positivos) / positivos if positivos > 0 else 1
                 
-                clf_xgb = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
+                clf_xgb = XGBClassifier(
+                    use_label_encoder=False, 
+                    eval_metric='logloss', 
+                    scale_pos_weight=scale_pos_weight,
+                    max_depth=3,          # Evita memorizar pacientes raros
+                    learning_rate=0.1,    # Hace el aprendizaje más conservador
+                    min_child_weight=2,   # Exige más evidencia
+                    random_state=42
+                )
                 clf_xgb.fit(X_sca, st.session_state['y_jaen'])
 
                 umbral_actual = st.session_state.get('umbral_jaen', 0.522)
@@ -356,7 +359,6 @@ with tab2:
         grafico_lr = alt.Chart(df_coef_lr).mark_bar().encode(
             x=alt.X('Valor:Q', title='Peso Predictivo (Coeficiente)'),
             y=alt.Y('Biomarcador:N', sort='-x', title=''), 
-            # Color equilibrado: Verde SAS para positivos, Gris Pizarra para negativos
             color=alt.condition(alt.datum['Valor'] > 0, alt.value('#008f4c'), alt.value('#64748b')),
             tooltip=['Biomarcador', 'Valor']
         ).properties(height=350)
@@ -364,7 +366,7 @@ with tab2:
         
         st.markdown("""
         <div style='font-size: 0.9rem; color: #475569; background-color: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #008f4c; margin-bottom: 2rem;'>
-            <b>Interpretación Clínica:</b> Este modelo aplica una ecuación matemática estricta. Las barras hacia la derecha (verdes) indican biomarcadores donde <i>valores más altos</i> se asocian a un mayor riesgo de amiloidosis. Las barras hacia la izquierda (grises) indican biomarcadores que exhiben una relación inversa: en estos casos, <b>un valor en sangre anormalmente bajo es lo que alerta del riesgo de enfermedad</b> (por ejemplo, glucosa o triglicéridos bajos asociados a estadios avanzados).
+            <b>Interpretación Clínica:</b> Este modelo aplica una ecuación matemática estricta. Las barras hacia la derecha (verdes) indican biomarcadores donde <i>valores más altos</i> se asocian a un mayor riesgo de amiloidosis. Las barras hacia la izquierda (grises) indican biomarcadores que exhiben una relación inversa: en estos casos, <b>un valor en sangre anormalmente bajo es lo que alerta del riesgo de enfermedad</b>.
         </div>
         """, unsafe_allow_html=True)
 
@@ -381,7 +383,7 @@ with tab2:
         
         st.markdown("""
         <div style='font-size: 0.9rem; color: #475569; background-color: #f8fafc; padding: 15px; border-radius: 6px; border-left: 4px solid #3b5a2f;'>
-            <b>Interpretación Clínica:</b> Representa el porcentaje de atención global que la Inteligencia Artificial dedica a cada variable para buscar patrones médicos cruzados (no hay valores negativos porque no es una suma/resta). La IA no evalúa los biomarcadores de forma aislada, sino que aprende a ver el "cuadro general" del paciente, superando las limitaciones clínicas de las fórmulas rígidas.
+            <b>Interpretación Clínica:</b> Representa el porcentaje de atención global que la Inteligencia Artificial dedica a cada variable para buscar patrones médicos cruzados. La IA no evalúa los biomarcadores de forma aislada, sino que aprende a ver el "cuadro general" del paciente.
         </div>
         """, unsafe_allow_html=True)
 
@@ -397,7 +399,7 @@ with tab3:
         <p style="color: #475569; font-size: 0.95rem; margin-bottom: 0;">
             Este módulo garantiza que el algoritmo no está simplemente "memorizando" historiales, sino aprendiendo a diagnosticar. 
             Para ello, el sistema se auto-examina aislando a un <b>25% de pacientes históricos de forma ciega</b>. 
-            En base a este examen, recalibramos automáticamente el umbral de alerta (Punto óptimo) para <b>maximizar la detección de casos reales (sensibilidad) reduciendo al máximo las falsas alarmas (especificidad)</b>.
+            En base a este examen, recalibramos automáticamente el umbral de alerta para <b>maximizar la detección de casos reales reduciendo al máximo las falsas alarmas</b>.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -431,9 +433,17 @@ with tab3:
                 d['umbral'] = nuevo_umbral
                 with open(ruta_modelo, 'wb') as archivo: pickle.dump(d, archivo)
             
-            # Evaluación XGBoost
+            # Evaluación XGBoost (CON FRENOS ANTI-SOBREAJUSTE)
             scale_pos_weight = (len(y_train) - sum(y_train)) / sum(y_train) if sum(y_train) > 0 else 1
-            clf_xgb_val = XGBClassifier(use_label_encoder=False, eval_metric='logloss', scale_pos_weight=scale_pos_weight, random_state=42)
+            clf_xgb_val = XGBClassifier(
+                use_label_encoder=False, 
+                eval_metric='logloss', 
+                scale_pos_weight=scale_pos_weight,
+                max_depth=3, 
+                learning_rate=0.1, 
+                min_child_weight=2,
+                random_state=42
+            )
             clf_xgb_val.fit(X_train_sca, y_train)
             y_pred_prob_xgb = clf_xgb_val.predict_proba(X_test_sca)[:, 1]
             fpr_xgb, tpr_xgb, _ = roc_curve(y_test, y_pred_prob_xgb)
@@ -475,7 +485,3 @@ with tab3:
             color=alt.Color('Modelo', scale=alt.Scale(range=['#94a3b8', '#008f4c']))
         ).properties(height=350).interactive()
         st.altair_chart(roc_chart, use_container_width=True)
-        
-        st.warning("**AVISO LEGAL:** Esta validación es de uso interno institucional. La capacidad predictiva del modelo es orientativa y no sustituye el juicio clínico del especialista. La responsabilidad final del diagnóstico recae sobre el facultativo.")
-    else:
-        st.warning("Cargue la base de datos histórica en la Pestaña 2 para activar el motor de validación.")
