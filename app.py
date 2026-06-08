@@ -188,15 +188,11 @@ with tab1:
                 with st.expander("GENERAR INFORME DE ESTRATIFICACIÓN"):
                     informe = (
                         "========================================================\n"
-                        "INFORME DE ESTRATIFICACIÓN - ATTR Lab\n"
+                        "INFORME DE ESTRATIFICACIÓN - ATTR LAB\n"
                         "========================================================\n\n"
                         "RESULTADOS DEL ANÁLISIS (Regresión Logística Multivariante):\n"
                         f"- Probabilidad Predictiva: {probabilidad:.1%}\n"
                         f"- CATEGORIZACIÓN FINAL DE RIESGO: {riesgo_texto}\n\n"
-                        
-                        "PERFIL DE BIOMARCADORES:\n"
-                        f"- NT-proBNP: {valores_extraidos['proBNP']} pg/mL\n"
-                        f"- Albúmina sérica: {valores_extraidos['Albumina']} g/dL\n\n"
                         
                         "* AVISO CLÍNICO LEGAL: Este informe es una herramienta de cribado orientativa.\n"
                         "No constituye un diagnóstico definitivo ni sustituye el juicio clínico.\n"
