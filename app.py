@@ -11,7 +11,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.impute import SimpleImputer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from imblearn.over_sampling import SMOTE  # <-- NUEVA IMPORTACIÓN
 
 # --- 1. CONFIGURACIÓN E INICIALIZACIÓN ---
 st.set_page_config(page_title="ATTR Lab", layout="wide", initial_sidebar_state="collapsed")
@@ -36,6 +35,7 @@ if os.path.exists(ruta_modelo):
     with open(ruta_modelo, 'rb') as archivo:
         datos = pickle.load(archivo)
         st.session_state['modelo_entrenado'] = True
+        # Soporte para la versión antigua (clf) y la nueva (clf_lr si quedó guardada)
         st.session_state['clf_jaen'] = datos.get('clf', datos.get('clf_lr'))
         st.session_state['imputer_jaen'] = datos['imputer']
         st.session_state['scaler_jaen'] = datos['scaler']
@@ -256,13 +256,9 @@ with tab2:
                 scaler = StandardScaler()
                 X_sca = scaler.fit_transform(X_imp)
 
-                # --- APLICACIÓN DE SMOTE PARA BALANCEO ---
-                smote = SMOTE(random_state=42)
-                X_resampled, y_resampled = smote.fit_resample(X_sca, st.session_state['y_jaen'])
-
-                # Entrenar Regresión Logística con los datos balanceados sintéticamente
+                # Entrenar Regresión Logística
                 clf = LogisticRegression(max_iter=2000, class_weight='balanced')
-                clf.fit(X_resampled, y_resampled)
+                clf.fit(X_sca, st.session_state['y_jaen'])
                 
                 umbral_actual = st.session_state.get('umbral_jaen', 0.522)
 
@@ -281,7 +277,7 @@ with tab2:
                 st.session_state['imputer_jaen'] = imputer
                 st.session_state['scaler_jaen'] = scaler
 
-                st.success("Operación completada: Motor predictivo calibrado y guardado de forma persistente con balanceo SMOTE.")
+                st.success("Operación completada: Motor predictivo calibrado y guardado de forma persistente.")
 
     if st.session_state['modelo_entrenado'] and st.session_state.get('clf_jaen') is not None:
         st.write("")
@@ -347,15 +343,9 @@ with tab3:
             X_train_sca = sca_val.fit_transform(imp_val.fit_transform(X_train))
             X_test_sca = sca_val.transform(imp_val.transform(X_test))
             
-            # --- APLICACIÓN DE SMOTE SOLO AL CONJUNTO DE ENTRENAMIENTO ---
-            smote_val = SMOTE(random_state=42)
-            X_train_resampled, y_train_resampled = smote_val.fit_resample(X_train_sca, y_train)
-
             # Evaluación del modelo lineal
             clf_lr_val = LogisticRegression(max_iter=2000, class_weight='balanced')
-            clf_lr_val.fit(X_train_resampled, y_train_resampled)
-            
-            # PREDICCIÓN SOBRE EL TEST ORIGINAL (SIN ALTERAR)
+            clf_lr_val.fit(X_train_sca, y_train)
             y_pred_prob_lr = clf_lr_val.predict_proba(X_test_sca)[:, 1]
             fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_test, y_pred_prob_lr)
             auc_lr = auc(fpr_lr, tpr_lr)
