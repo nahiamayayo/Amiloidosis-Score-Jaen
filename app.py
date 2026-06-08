@@ -76,7 +76,7 @@ with header_col1:
     if os.path.exists("huj.png"): st.image("huj.png", use_container_width=True) 
 with header_col2:
     st.title("ATTR LAB")
-    st.markdown("<p style='color: #64748b; font-size: 1.15rem; margin-top: -10px; font-weight: 500;'>HERRAMIENTA DE LABORATORIO PARA LA ESTRATIFICACIÓN DE RIESGO DE AMILOIDOSIS CARDÍACA POR TRANSTIRRETINA</p>", unsafe_allow_html=True)
+    st.markdown("<p style='color: #64748b; font-size: 1.15rem; margin-top: -10px; font-weight: 500;'>HERRAMIENTA DE LABORATORIO PARA LA ESTRATIFICACIÓN DE RIESGO DE AMILOIDOSIS CARDÍACA POR TRANSTIRETINA</p>", unsafe_allow_html=True)
 
 st.divider()
 
