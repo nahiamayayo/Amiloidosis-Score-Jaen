@@ -5,4 +5,3 @@ scikit-learn
 openpyxl
 pdfplumber
 matplotlib
-imbalanced-learn
