@@ -370,7 +370,7 @@ with tab3:
                 'm_vpp': tp / (tp + fp) if (tp + fp) > 0 else 0,
                 'm_vpn': tn / (tn + fn) if (tn + fn) > 0 else 0,
                 'auc_lr': auc_lr,
-                'df_roc_data': pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr, 'Modelo': f'Regresión Logística (AUC={auc_lr:.3f})'})
+                'df_roc_data': pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr})
             })
             st.rerun()
 
@@ -387,14 +387,33 @@ with tab3:
         st.markdown("---")
         st.markdown("#### CURVA DE RENDIMIENTO (ROC)")
         
-        # Añadimos una línea diagonal de referencia para que el gráfico quede profesional
-        df_ref = pd.DataFrame({'FPR': [0, 1], 'TPR': [0, 1], 'Modelo': 'Referencia Aleatoria'})
-        df_plot = pd.concat([st.session_state['df_roc_data'], df_ref])
+        # Corregimos los nombres para que el valor del AUC se imprima explícitamente en la leyenda
+        texto_leyenda_modelo = f"Regresión Logística (AUC = {st.session_state['auc_lr']:.3f})"
         
+        df_modelo = st.session_state['df_roc_data'].copy()
+        df_modelo['Modelo'] = texto_leyenda_modelo
+        
+        df_ref = pd.DataFrame({
+            'FPR': [0, 1], 
+            'TPR': [0, 1], 
+            'Modelo': 'Referencia Aleatoria (Gris)'
+        })
+        
+        df_plot = pd.concat([df_modelo, df_ref])
+        
+        # Generación del gráfico con la leyenda corregida y limpia
         roc_chart = alt.Chart(df_plot).mark_line(size=3).encode(
-            x=alt.X('FPR', title='Tasa de Falsos Positivos'),
-            y=alt.Y('TPR', title='Tasa de Verdaderos Positivos'),
-            color=alt.Color('Modelo', scale=alt.Scale(range=['#94a3b8', '#008f4c'])),
-            strokeDash=alt.condition(alt.datum.Modelo == 'Referencia Aleatoria', alt.value([5, 5]), alt.value([0]))
-        ).properties(height=350).interactive()
+            x=alt.X('FPR', title='Tasa de Falsos Positivos (1 - Especificidad)'),
+            y=alt.Y('TPR', title='Tasa de Verdaderos Positivos (Sensibilidad)'),
+            color=alt.Color('Modelo', scale=alt.Scale(
+                domain=[texto_leyenda_modelo, 'Referencia Aleatoria (Gris)'],
+                range=['#008f4c', '#94a3b8']
+            ), title="Leyenda del Motor Predictivo"),
+            strokeDash=alt.condition(
+                alt.datum.Modelo == 'Referencia Aleatoria (Gris)', 
+                alt.value([5, 5]), 
+                alt.value([0])
+            )
+        ).properties(height=380).interactive()
+        
         st.altair_chart(roc_chart, use_container_width=True)
