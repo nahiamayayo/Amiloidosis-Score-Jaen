@@ -349,13 +349,13 @@ with tab3:
             fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_test, y_pred_prob_lr)
             auc_lr = auc(fpr_lr, tpr_lr)
             
-            # --- NUEVA ESTRATEGIA DE SENSIBILIDAD CLÍNICA ---
-            idx_sensibles = np.where(tpr_lr >= 0.85)[0]
-            if len(idx_sensibles) > 0:
-                mejor_idx = idx_sensibles[np.argmax(tpr_lr[idx_sensibles] - fpr_lr[idx_sensibles])]
-                nuevo_umbral = thresholds_lr[mejor_idx]
-            else:
-                nuevo_umbral = 0.30  # Umbral de seguridad clínico
+            # --- ESTRATEGIA EQUITATIVA (Balance Clínico) ---
+            # Buscamos el punto de corte exacto donde la Sensibilidad y la Especificidad 
+            # estén lo más equilibradas posible (minimizar la diferencia entre ambas).
+            especificidad_lr = 1 - fpr_lr
+            diferencia = np.abs(tpr_lr - especificidad_lr)
+            mejor_idx = np.argmin(diferencia)
+            nuevo_umbral = thresholds_lr[mejor_idx]
                 
             st.session_state['umbral_jaen'] = nuevo_umbral
             
