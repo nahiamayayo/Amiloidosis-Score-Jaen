@@ -35,7 +35,6 @@ if os.path.exists(ruta_modelo):
     with open(ruta_modelo, 'rb') as archivo:
         datos = pickle.load(archivo)
         st.session_state['modelo_entrenado'] = True
-        # Soporte para la versión antigua (clf) y la nueva (clf_lr si quedó guardada)
         st.session_state['clf_jaen'] = datos.get('clf', datos.get('clf_lr'))
         st.session_state['imputer_jaen'] = datos['imputer']
         st.session_state['scaler_jaen'] = datos['scaler']
@@ -351,22 +350,55 @@ with tab3:
             auc_lr = auc(fpr_lr, tpr_lr)
             
             # --- NUEVA ESTRATEGIA DE SENSIBILIDAD CLÍNICA ---
-# Buscamos un umbral que garantice al menos un 85-90% de sensibilidad (priorizando el cribado)
-# Si no encuentra un punto exacto, aplicamos por defecto un umbral de seguridad del 30% (0.30)
-idx_sensibles = np.where(tpr_lr >= 0.85)[0]
-if len(idx_sensibles) > 0:
-  # De los que cumplen alta sensibilidad, cogemos el que mejor especificidad tenga
-  mejor_idx = idx_sensibles[np.argmax(tpr_lr[idx_sensibles] - fpr_lr[idx_sensibles])]
-  nuevo_umbral = thresholds_lr[mejor_idx]
-else:
-  nuevo_umbral = 0.30  # Umbral de seguridad clínico para forzar sensibilidad
+            idx_sensibles = np.where(tpr_lr >= 0.85)[0]
+            if len(idx_sensibles) > 0:
+                mejor_idx = idx_sensibles[np.argmax(tpr_lr[idx_sensibles] - fpr_lr[idx_sensibles])]
+                nuevo_umbral = thresholds_lr[mejor_idx]
+            else:
+                nuevo_umbral = 0.30  # Umbral de seguridad clínico
+                
+            st.session_state['umbral_jaen'] = nuevo_umbral
+            
+            # Guardar el nuevo umbral para persistencia
+            if st.session_state['modelo_entrenado']:
+                with open(ruta_modelo, 'rb') as archivo: 
+                    d = pickle.load(archivo)
+                d['umbral'] = nuevo_umbral
+                with open(ruta_modelo, 'wb') as archivo: 
+                    pickle.dump(d, archivo)
+            
+            # Calcular matriz de confusión y métricas con el nuevo umbral
+            y_pred_binario = (y_pred_prob_lr >= nuevo_umbral).astype(int)
+            tn, fp, fn, tp = confusion_matrix(y_test, y_pred_binario).ravel()
+            
+            st.session_state.update({
+                'auditoria_lista': True, 
+                'nuevo_umbral_calculado': nuevo_umbral,
+                'm_sensibilidad': tp / (tp + fn) if (tp + fn) > 0 else 0,
+                'm_especificidad': tn / (tn + fp) if (tn + fp) > 0 else 0,
+                'm_vpp': tp / (tp + fp) if (tp + fp) > 0 else 0,
+                'm_vpn': tn / (tn + fn) if (tn + fn) > 0 else 0,
+                'auc_lr': auc_lr,
+                'df_roc_data': pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr})
+            })
+            st.rerun()
 
-st.session_state['umbral_jaen'] = nuevo_umbral
+    # -- SECCIÓN DE RESULTADOS (Fuera del botón para que se mantengan visibles) --
+    if 'auditoria_lista' in st.session_state:
+        st.success(f"Punto de corte clínico aplicado: **{st.session_state['nuevo_umbral_calculado']*100:.1f}%**")
         
-        # 1. Creamos un título dinámico con el AUC bien visible
+        st.markdown("#### MÉTRICAS DE EFECTIVIDAD CLÍNICA")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Sensibilidad", f"{st.session_state['m_sensibilidad']:.1%}", help="Capacidad para detectar enfermos (evita falsos negativos).")
+        c2.metric("Especificidad", f"{st.session_state['m_especificidad']:.1%}", help="Capacidad para descartar sanos (evita falsos positivos).")
+        c3.metric("VPP", f"{st.session_state['m_vpp']:.1%}", help="Probabilidad de enfermedad tras una alerta positiva.")
+        c4.metric("VPN", f"{st.session_state['m_vpn']:.1%}", help="Seguridad clínica ante un resultado bajo riesgo.")
+        
+        st.markdown("---")
+        st.markdown("#### CURVA DE RENDIMIENTO (ROC)")
+        
         st.markdown(f"### Valor de AUC (Área bajo la curva): **{st.session_state['auc_lr']:.3f}**")
         
-        # 2. Simplificamos la leyenda para que no se corte
         df_modelo = st.session_state['df_roc_data'].copy()
         df_modelo['Modelo'] = 'Regresión Logística'
         
@@ -378,7 +410,6 @@ st.session_state['umbral_jaen'] = nuevo_umbral
         
         df_plot = pd.concat([df_modelo, df_ref])
         
-        # 3. Gráfico con colores institucionales y leyenda simplificada
         roc_chart = alt.Chart(df_plot).mark_line(size=3).encode(
             x=alt.X('FPR', title='Tasa de Falsos Positivos'),
             y=alt.Y('TPR', title='Tasa de Verdaderos Positivos'),
