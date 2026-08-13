@@ -350,42 +350,18 @@ with tab3:
             fpr_lr, tpr_lr, thresholds_lr = roc_curve(y_test, y_pred_prob_lr)
             auc_lr = auc(fpr_lr, tpr_lr)
             
-            # Optimización por Youden
-            youden_idx = np.argmax(tpr_lr - fpr_lr)
-            nuevo_umbral = thresholds_lr[youden_idx]
-            st.session_state['umbral_jaen'] = nuevo_umbral
-            
-            if st.session_state['modelo_entrenado']:
-                with open(ruta_modelo, 'rb') as archivo: d = pickle.load(archivo)
-                d['umbral'] = nuevo_umbral
-                with open(ruta_modelo, 'wb') as archivo: pickle.dump(d, archivo)
-            
-            y_pred_binario = (y_pred_prob_lr >= nuevo_umbral).astype(int)
-            tn, fp, fn, tp = confusion_matrix(y_test, y_pred_binario).ravel()
-            
-            st.session_state.update({
-                'auditoria_lista': True, 'nuevo_umbral_calculado': nuevo_umbral,
-                'm_sensibilidad': tp / (tp + fn) if (tp + fn) > 0 else 0,
-                'm_especificidad': tn / (tn + fp) if (tn + fp) > 0 else 0,
-                'm_vpp': tp / (tp + fp) if (tp + fp) > 0 else 0,
-                'm_vpn': tn / (tn + fn) if (tn + fn) > 0 else 0,
-                'auc_lr': auc_lr,
-                'df_roc_data': pd.DataFrame({'FPR': fpr_lr, 'TPR': tpr_lr})
-            })
-            st.rerun()
+            # --- NUEVA ESTRATEGIA DE SENSIBILIDAD CLÍNICA ---
+# Buscamos un umbral que garantice al menos un 85-90% de sensibilidad (priorizando el cribado)
+# Si no encuentra un punto exacto, aplicamos por defecto un umbral de seguridad del 30% (0.30)
+idx_sensibles = np.where(tpr_lr >= 0.85)[0]
+if len(idx_sensibles) > 0:
+  # De los que cumplen alta sensibilidad, cogemos el que mejor especificidad tenga
+  mejor_idx = idx_sensibles[np.argmax(tpr_lr[idx_sensibles] - fpr_lr[idx_sensibles])]
+  nuevo_umbral = thresholds_lr[mejor_idx]
+else:
+  nuevo_umbral = 0.30  # Umbral de seguridad clínico para forzar sensibilidad
 
-    if 'auditoria_lista' in st.session_state:
-        st.success(f"Punto de corte óptimo (Youden): **{st.session_state['nuevo_umbral_calculado']*100:.1f}%**")
-        
-        st.markdown("#### MÉTRICAS DE EFECTIVIDAD CLÍNICA")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Sensibilidad", f"{st.session_state['m_sensibilidad']:.1%}", help="Capacidad para detectar enfermos (evita falsos negativos).")
-        c2.metric("Especificidad", f"{st.session_state['m_especificidad']:.1%}", help="Capacidad para descartar sanos (evita falsos positivos).")
-        c3.metric("VPP", f"{st.session_state['m_vpp']:.1%}", help="Probabilidad de enfermedad tras una alerta positiva.")
-        c4.metric("VPN", f"{st.session_state['m_vpn']:.1%}", help="Seguridad clínica ante un resultado bajo riesgo.")
-        
-        st.markdown("---")
-        st.markdown("#### CURVA DE RENDIMIENTO (ROC)")
+st.session_state['umbral_jaen'] = nuevo_umbral
         
         # 1. Creamos un título dinámico con el AUC bien visible
         st.markdown(f"### Valor de AUC (Área bajo la curva): **{st.session_state['auc_lr']:.3f}**")
